@@ -148,6 +148,7 @@ autosales-agent/
 | GET  | `/api/leads` | 线索列表 |
 | POST | `/api/knowledge/search` | 知识库检索 |
 | POST | `/api/knowledge/upload` | 上传知识文档 |
+| POST | `/api/knowledge/upload-file` | 上传 PDF/TXT/DOCX/MD 知识文件 |
 
 ## 内置数据
 
@@ -172,23 +173,3 @@ START → IntentNode → MemoryLoadNode → SlotFillNode → RouteNode
                                           ▼
                                     MemoryWriteNode → END
 ```
-
-## 面试问答
-
-### Q: 普通聊天机器人和 Agent 的区别？
-A: 普通聊天机器人只做问答匹配，而 Agent 具备**感知-推理-行动**闭环。AutoLead Agent 能识别客户意图、调用业务工具（车型查询/分期试算/预约）、维护跨会话记忆、自主决策下一步行动，而非简单地回复预设话术。
-
-### Q: LangGraph 的作用？
-A: LangGraph 将销售流程拆分为有向图节点（意图识别→记忆加载→字段补全→路由→工具执行→回复生成→记忆更新），每个节点是独立的状态转换函数，支持条件分支和灵活编排。
-
-### Q: Tool Calling 的业务价值？
-A: 让 LLM 突破文本生成的局限，能操作真实业务系统。客户问"月供多少"时，Agent 调用分期计算器返回精确数字；问"有现车吗"时，调用库存系统查实时数据——而不是臆想回答。
-
-### Q: 记忆系统设计？
-A: 短期记忆（Redis/State 中的对话历史），长期记忆（PostgreSQL 中的客户画像：预算/用途/意向车型/关注点/跟进摘要），业务知识（pgvector 向量库中的车型资料/话术）。
-
-### Q: RAG 用于什么？
-A: 车型参数（宋PLUS DM-i 的油耗/空间）、优惠政策（当前补贴方案）、竞品资料（对比数据）、销售话术（价格异议处理）。确保 Agent 的推荐有依据，不是凭空生成。
-
-### Q: 错误处理策略？
-A: LLM 调用失败→规则兜底回复；JSON 解析失败→重试一次；工具调用失败→提示稍后再试；信息不足→追问不要强行推荐；库存为空→推荐同级替代车型。

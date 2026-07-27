@@ -19,6 +19,18 @@ const api = {
         return resp.json();
     },
 
+    async requestForm(method, path, formData) {
+        const resp = await fetch(`${API_BASE}${path}`, {
+            method,
+            body: formData,
+        });
+        if (!resp.ok) {
+            const detail = await resp.text();
+            throw new Error(`API Error: ${resp.status} ${detail || resp.statusText}`);
+        }
+        return resp.json();
+    },
+
     // 对话
     chat(message, sessionId = '', customerId = '') {
         return this.request('POST', '/chat/message', {
@@ -74,6 +86,13 @@ const api = {
     },
     uploadKnowledge(data) {
         return this.request('POST', '/knowledge/upload', data);
+    },
+    uploadKnowledgeFile(file, docType = 'general', title = '') {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('doc_type', docType);
+        if (title) formData.append('title', title);
+        return this.requestForm('POST', '/knowledge/upload-file', formData);
     },
     searchKnowledge(query, topK = 5) {
         return this.request('POST', '/knowledge/search', { query, top_k: topK });

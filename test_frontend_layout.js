@@ -50,9 +50,12 @@ assert(layout.includes('id="model-badge"'), 'topbar model badge should be addres
 assert(apiJs.includes('initModelBadge'), 'frontend should sync the model badge from the backend');
 assert(apiJs.includes('/health'), 'frontend should read health status for provider display');
 assert(apiJs.includes('uploadKnowledge'), 'frontend API should support adding knowledge documents');
+assert(apiJs.includes('uploadKnowledgeFile'), 'frontend API should support uploading knowledge files');
 assert(apiJs.includes("'/knowledge'"), 'frontend API should support listing knowledge documents');
 assert(carsJs.includes('车型数据') && carsJs.includes('知识文档') && carsJs.includes('检索测试'), 'cars page should expose car data and knowledge management tabs');
 assert(carsJs.includes('api.uploadKnowledge'), 'cars page should upload knowledge documents');
+assert(carsJs.includes('api.uploadKnowledgeFile'), 'cars page should upload PDF/TXT/Word/MD knowledge files');
+assert(carsJs.includes('accept=".pdf,.txt,.docx,.md"'), 'knowledge upload should support common document formats');
 assert(carsJs.includes('api.searchKnowledge'), 'cars page should test RAG retrieval');
 assert(chat.includes('new WebSocket'), 'chat should use websocket streaming for AI replies');
 assert(chat.includes('createStreamingAgentMessage'), 'chat should create an assistant bubble before streamed output arrives');

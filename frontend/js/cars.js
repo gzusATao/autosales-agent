@@ -132,8 +132,38 @@ function renderKnowledgeTab() {
     <div class="grid-2 kb-management-grid">
       <div class="card">
         <div class="card-header">
-          <h3>新增知识文档</h3>
-          <span class="tag tag-blue">自动切块</span>
+          <h3>上传知识文件</h3>
+          <span class="tag tag-blue">Pandas 清洗</span>
+        </div>
+        <form class="kb-form" onsubmit="submitKnowledgeFile(event)">
+          <label class="form-label">选择文件</label>
+          <label class="kb-upload-box" for="kb-file">
+            <input id="kb-file" type="file" accept=".pdf,.txt,.docx,.md" required>
+            <strong>点击上传 PDF / TXT / Word / MD</strong>
+            <span>系统会抽取文本，使用 Pandas 去空行、去重复段落，再切块入库。</span>
+          </label>
+
+          <label class="form-label">文档标题（可选）</label>
+          <input class="form-control" id="kb-file-title" placeholder="不填则使用文件名">
+
+          <label class="form-label">文档类型</label>
+          <select class="form-control" id="kb-file-type">
+            <option value="car_config">车型配置</option>
+            <option value="policy">优惠政策</option>
+            <option value="competitor">竞品资料</option>
+            <option value="sales_script">销售话术</option>
+            <option value="general">通用资料</option>
+          </select>
+
+          <button class="btn btn-primary" id="kb-file-submit" type="submit">上传并入库</button>
+          <div class="hint" id="kb-file-status"></div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>手动录入知识</h3>
+          <span class="tag tag-cold">文本切块</span>
         </div>
         <form class="kb-form" onsubmit="submitKnowledge(event)">
           <label class="form-label">文档标题</label>
@@ -156,19 +186,6 @@ function renderKnowledgeTab() {
         </form>
       </div>
 
-      <div class="card">
-        <div class="card-header">
-          <h3>RAG 流程说明</h3>
-          <span class="tag tag-success">面试可讲</span>
-        </div>
-        <div class="rag-flow">
-          <div><strong>1. 文档录入</strong><span>销售主管维护车型配置、优惠政策、竞品资料。</span></div>
-          <div><strong>2. 文本切块</strong><span>后端按段落和句子拆成知识块，控制单块长度。</span></div>
-          <div><strong>3. 知识入库</strong><span>保存到 knowledge_documents 和 knowledge_chunks。</span></div>
-          <div><strong>4. 语义检索</strong><span>用户咨询时按问题召回相关知识片段。</span></div>
-          <div><strong>5. 辅助回复</strong><span>检索结果作为上下文，和工具结果一起生成销售回复。</span></div>
-        </div>
-      </div>
     </div>
 
     <div class="card">
@@ -179,6 +196,39 @@ function renderKnowledgeTab() {
       <div id="knowledge-list"></div>
     </div>
   `;
+}
+
+async function submitKnowledgeFile(event) {
+  event.preventDefault();
+  const fileInput = document.getElementById('kb-file');
+  const submitBtn = document.getElementById('kb-file-submit');
+  const status = document.getElementById('kb-file-status');
+  const title = document.getElementById('kb-file-title').value.trim();
+  const docType = document.getElementById('kb-file-type').value;
+  const file = fileInput?.files?.[0];
+
+  if (!file) {
+    status.textContent = '请先选择一个知识文档。';
+    return;
+  }
+
+  submitBtn.disabled = true;
+  status.textContent = '正在抽取文本、清洗段落并切块入库...';
+
+  try {
+    const result = await api.uploadKnowledgeFile(file, docType, title);
+    status.textContent = `上传成功，生成 ${result.chunks} 个知识切片。`;
+    fileInput.value = '';
+    document.getElementById('kb-file-title').value = '';
+    const list = await api.listKnowledge();
+    knowledgeDocs = list.docs || [];
+    renderKnowledgeList();
+  } catch (error) {
+    console.error(error);
+    status.textContent = '上传失败，请确认文件格式为 PDF、TXT、DOCX 或 MD。';
+  } finally {
+    submitBtn.disabled = false;
+  }
 }
 
 function renderSearchTab() {

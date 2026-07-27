@@ -494,31 +494,38 @@ textarea.form-control {
   gap: 10px;
 }
 
-.kb-textarea {
-  min-height: 180px;
-}
-
-.rag-flow {
+.kb-upload-box {
   display: grid;
-  gap: 10px;
-}
-
-.rag-flow div {
-  padding: 10px 12px;
-  border: 1px solid var(--border-light);
+  gap: 6px;
+  padding: 18px;
+  border: 1px dashed #93c5fd;
   border-radius: 8px;
-  background: #f8fafc;
+  background: #f8fbff;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease;
 }
 
-.rag-flow strong {
-  display: block;
-  margin-bottom: 3px;
+.kb-upload-box:hover {
+  border-color: var(--blue);
+  background: #eff6ff;
+}
+
+.kb-upload-box input {
+  width: 100%;
+}
+
+.kb-upload-box strong {
   color: var(--text-primary);
 }
 
-.rag-flow span {
-  color: var(--text-secondary);
+.kb-upload-box span {
   font-size: 13px;
+  line-height: 1.6;
+}
+
+.kb-textarea {
+  min-height: 180px;
 }
 
 .knowledge-item,
