@@ -115,12 +115,12 @@ async function loadDashboard() {
           <div class="card">
             <div class="card-header"><h3>${Icons.cpu} Agent 能力状态</h3></div>
             <div class="card-body">
-              <div class="agent-field"><span class="label">RAG 知识库</span><span class="value"><span class="tag tag-success">已启用</span></span></div>
+              <div class="agent-field"><span class="label">销售资料库</span><span class="value"><span class="tag tag-success">已启用</span></span></div>
               <div class="agent-field"><span class="label">Tool Calling</span><span class="value"><span class="tag tag-success">已启用</span></span></div>
               <div class="agent-field"><span class="label">LangGraph 流程</span><span class="value"><span class="tag tag-success">已启用</span></span></div>
               <div class="agent-field"><span class="label">记忆系统</span><span class="value"><span class="tag tag-success">已启用</span></span></div>
               <div class="agent-field"><span class="label">车型库</span><span class="value">${cars.length} 款车型</span></div>
-              <div class="agent-field"><span class="label">知识文档</span><span class="value">8 篇</span></div>
+              <div class="agent-field"><span class="label">销售资料</span><span class="value">8 篇</span></div>
             </div>
           </div>
 

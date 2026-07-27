@@ -16,7 +16,7 @@
 | 🏎️ **试驾预约** | 创建试驾预约记录 |
 | 📋 **客户画像** | 跨会话保存客户需求记忆 |
 | 📊 **销售线索** | 线索等级评定和跟进管理 |
-| 📚 **RAG 知识库** | 车型参数、优惠政策、销售话术语义检索 |
+| 📚 **销售资料库** | 车型参数、优惠政策、销售话术语义检索 |
 | 🔧 **工具调用轨迹** | 展示每一步的工具调用过程和结果 |
 
 ## 技术栈
@@ -92,7 +92,7 @@ autosales-agent/
 │   ├── config.py            # 配置管理
 │   ├── database.py          # 数据库连接
 │   ├── llm.py               # DeepSeek/Mock LLM 封装
-│   ├── seed_data.py         # 种子数据（8款车型+知识库+演示客户）
+│   ├── seed_data.py         # 种子数据（8款车型+销售资料+演示客户）
 │   ├── models/
 │   │   └── models.py        # SQLAlchemy 数据模型
 │   ├── schemas/
@@ -102,14 +102,14 @@ autosales-agent/
 │   │   ├── cars.py          # 车型 API
 │   │   ├── customers.py     # 客户/线索 API
 │   │   ├── finance.py       # 金融/库存/预约 API
-│   │   └── knowledge.py     # 知识库 API
+│   │   └── knowledge.py     # 销售资料库 API
 │   ├── agent/
 │   │   ├── state.py         # LangGraph 状态定义
 │   │   ├── graph.py         # 状态图编排
 │   │   ├── nodes.py         # 图节点（意图/记忆/路由/工具/回复）
 │   │   └── tools.py         # 业务工具函数
 │   ├── rag/
-│   │   └── rag.py           # RAG 知识库检索
+│   │   └── rag.py           # 销售资料检索
 │   ├── memory/
 │   │   └── memory.py        # 短期/长期记忆管理
 │   └── requirements.txt
@@ -146,15 +146,15 @@ autosales-agent/
 | GET  | `/api/appointments` | 预约列表 |
 | GET  | `/api/customers/{id}/profile` | 客户画像 |
 | GET  | `/api/leads` | 线索列表 |
-| POST | `/api/knowledge/search` | 知识库检索 |
-| POST | `/api/knowledge/upload` | 上传知识文档 |
-| POST | `/api/knowledge/upload-file` | 上传 PDF/TXT/DOCX/MD 知识文件 |
+| POST | `/api/knowledge/search` | 销售资料检索 |
+| POST | `/api/knowledge/upload` | 上传销售资料 |
+| POST | `/api/knowledge/upload-file` | 上传 PDF/TXT/DOCX/MD 销售资料文件 |
 
 ## 内置数据
 
 **车型（8款）**：比亚迪宋PLUS DM-i、秦PLUS DM-i、丰田锋兰达双擎、本田CR-V e:HEV、哈弗枭龙MAX、吉利星越L、特斯拉Model Y、小鹏G6
 
-**知识库（8篇）**：车型配置说明、选购指南、分期常见问题、试驾流程、竞品对比、话术、优惠政策
+**销售资料库（8篇）**：车型配置说明、选购指南、分期常见问题、试驾流程、竞品对比、话术、优惠政策
 
 **演示客户（2个）**：张先生（高意向，预算18-22万混动SUV）、李女士（中意向，预算15万内混动轿车）
 

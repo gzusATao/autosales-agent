@@ -52,7 +52,7 @@ assert(apiJs.includes('/health'), 'frontend should read health status for provid
 assert(apiJs.includes('uploadKnowledge'), 'frontend API should support adding knowledge documents');
 assert(apiJs.includes('uploadKnowledgeFile'), 'frontend API should support uploading knowledge files');
 assert(apiJs.includes("'/knowledge'"), 'frontend API should support listing knowledge documents');
-assert(carsJs.includes('车型数据') && carsJs.includes('知识文档') && carsJs.includes('检索测试'), 'cars page should expose car data and knowledge management tabs');
+assert(carsJs.includes('车型档案') && carsJs.includes('销售资料') && carsJs.includes('资料检索'), 'cars page should expose car profile and sales material tabs');
 assert(carsJs.includes('api.uploadKnowledge'), 'cars page should upload knowledge documents');
 assert(carsJs.includes('api.uploadKnowledgeFile'), 'cars page should upload PDF/TXT/Word/MD knowledge files');
 assert(carsJs.includes('accept=".pdf,.txt,.docx,.md"'), 'knowledge upload should support common document formats');

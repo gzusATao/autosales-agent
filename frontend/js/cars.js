@@ -1,5 +1,5 @@
 /**
- * 汽车销售顾问 — 车型库 / 知识库管理页
+ * 汽车销售顾问 — 车型库 / 销售资料库页面
  */
 
 let carsData = [];
@@ -15,7 +15,7 @@ const DOC_TYPE_LABELS = {
 };
 
 async function loadCars() {
-  const content = initLayout('车型库 / 知识库管理', 'cars');
+  const content = initLayout('车型库 / 销售资料库', 'cars');
   content.innerHTML = `<div class="loading"><div class="spinner"></div><p>加载中...</p></div>`;
 
   try {
@@ -36,19 +36,19 @@ function renderCarsWorkspace(content) {
   content.innerHTML = `
     <div class="page-heading">
       <div>
-        <h1>车型库 / 知识库管理</h1>
-        <p>结构化车型用于工具调用，知识文档用于 RAG 检索增强。</p>
+        <h1>车型库 / 销售资料库</h1>
+        <p>车型档案用于工具调用，销售资料用于对话检索增强。</p>
       </div>
       <div class="page-heading-meta">
         <span class="tag tag-blue">${carsData.length} 款车型</span>
-        <span class="tag tag-success">${knowledgeDocs.length} 篇知识</span>
+        <span class="tag tag-success">${knowledgeDocs.length} 篇资料</span>
       </div>
     </div>
 
     <div class="kb-tabs" role="tablist">
-      <button class="kb-tab ${activeTab === 'cars' ? 'active' : ''}" onclick="switchCarsTab('cars')">车型数据</button>
-      <button class="kb-tab ${activeTab === 'knowledge' ? 'active' : ''}" onclick="switchCarsTab('knowledge')">知识文档</button>
-      <button class="kb-tab ${activeTab === 'search' ? 'active' : ''}" onclick="switchCarsTab('search')">检索测试</button>
+      <button class="kb-tab ${activeTab === 'cars' ? 'active' : ''}" onclick="switchCarsTab('cars')">车型档案</button>
+      <button class="kb-tab ${activeTab === 'knowledge' ? 'active' : ''}" onclick="switchCarsTab('knowledge')">销售资料</button>
+      <button class="kb-tab ${activeTab === 'search' ? 'active' : ''}" onclick="switchCarsTab('search')">资料检索</button>
     </div>
 
     <section id="cars-tab-cars" class="kb-tab-panel ${activeTab === 'cars' ? 'active' : ''}">
@@ -132,7 +132,7 @@ function renderKnowledgeTab() {
     <div class="grid-2 kb-management-grid">
       <div class="card">
         <div class="card-header">
-          <h3>上传知识文件</h3>
+          <h3>上传销售资料</h3>
           <span class="tag tag-blue">Pandas 清洗</span>
         </div>
         <form class="kb-form" onsubmit="submitKnowledgeFile(event)">
@@ -162,7 +162,7 @@ function renderKnowledgeTab() {
 
       <div class="card">
         <div class="card-header">
-          <h3>手动录入知识</h3>
+          <h3>手动录入资料</h3>
           <span class="tag tag-cold">文本切块</span>
         </div>
         <form class="kb-form" onsubmit="submitKnowledge(event)">
@@ -178,10 +178,10 @@ function renderKnowledgeTab() {
             <option value="general">通用资料</option>
           </select>
 
-          <label class="form-label">知识内容</label>
+          <label class="form-label">资料内容</label>
           <textarea class="form-control kb-textarea" id="kb-content" placeholder="粘贴车型配置、优惠政策、竞品资料或销售话术..." required></textarea>
 
-          <button class="btn btn-primary" id="kb-submit" type="submit">保存到知识库</button>
+          <button class="btn btn-primary" id="kb-submit" type="submit">保存到资料库</button>
           <div class="hint" id="kb-save-status"></div>
         </form>
       </div>
@@ -190,7 +190,7 @@ function renderKnowledgeTab() {
 
     <div class="card">
       <div class="card-header">
-        <h3>知识文档列表</h3>
+        <h3>销售资料列表</h3>
         <span class="text-muted text-sm">${knowledgeDocs.length} 篇文档</span>
       </div>
       <div id="knowledge-list"></div>
@@ -208,7 +208,7 @@ async function submitKnowledgeFile(event) {
   const file = fileInput?.files?.[0];
 
   if (!file) {
-    status.textContent = '请先选择一个知识文档。';
+    status.textContent = '请先选择一个销售资料文件。';
     return;
   }
 
@@ -217,7 +217,7 @@ async function submitKnowledgeFile(event) {
 
   try {
     const result = await api.uploadKnowledgeFile(file, docType, title);
-    status.textContent = `上传成功，生成 ${result.chunks} 个知识切片。`;
+    status.textContent = `上传成功，生成 ${result.chunks} 个资料切片。`;
     fileInput.value = '';
     document.getElementById('kb-file-title').value = '';
     const list = await api.listKnowledge();
@@ -235,14 +235,14 @@ function renderSearchTab() {
   return `
     <div class="card">
       <div class="card-header">
-        <h3>RAG 检索测试</h3>
+        <h3>资料检索</h3>
         <span class="tag tag-blue">检索预览</span>
       </div>
       <div class="kb-search-row">
         <input class="form-control" id="kb-query" placeholder="例如：20万以内混动SUV怎么推荐？">
         <button class="btn btn-primary" onclick="testKnowledgeSearch()">检索</button>
       </div>
-      <div class="hint">用于面试演示：输入用户问题，查看知识库召回了哪些片段。</div>
+      <div class="hint">输入客户问题，查看销售资料库召回了哪些相关片段。</div>
     </div>
 
     <div id="kb-search-results"></div>
@@ -292,7 +292,7 @@ function renderKnowledgeList() {
   if (!el) return;
 
   if (!knowledgeDocs.length) {
-    el.innerHTML = '<div class="empty-state compact"><p>暂无知识文档</p><div class="hint">可以先新增一段优惠政策或销售话术。</div></div>';
+    el.innerHTML = '<div class="empty-state compact"><p>暂无销售资料</p><div class="hint">可以先新增一段优惠政策或销售话术。</div></div>';
     return;
   }
 
@@ -338,7 +338,7 @@ async function submitKnowledge(event) {
       content,
       metadata: { source: '车型库管理页' },
     });
-    status.textContent = `保存成功，生成 ${result.chunks} 个知识切片。`;
+    status.textContent = `保存成功，生成 ${result.chunks} 个资料切片。`;
     document.getElementById('kb-title').value = '';
     document.getElementById('kb-content').value = '';
     const list = await api.listKnowledge();
@@ -357,7 +357,7 @@ async function testKnowledgeSearch() {
   const resultEl = document.getElementById('kb-search-results');
   if (!query || !resultEl) return;
 
-  resultEl.innerHTML = '<div class="card"><div class="loading compact"><div class="spinner"></div><p>正在检索知识库...</p></div></div>';
+  resultEl.innerHTML = '<div class="card"><div class="loading compact"><div class="spinner"></div><p>正在检索销售资料库...</p></div></div>';
   try {
     const result = await api.searchKnowledge(query, 5);
     const docs = result.docs || [];
@@ -365,23 +365,23 @@ async function testKnowledgeSearch() {
       <div class="card">
         <div class="card-header">
           <h3>检索结果</h3>
-          <span class="text-muted text-sm">命中 ${docs.length} 个知识块</span>
+          <span class="text-muted text-sm">命中 ${docs.length} 个资料片段</span>
         </div>
         ${docs.length ? docs.map(doc => `
           <article class="knowledge-result">
-            <div class="knowledge-title">${escapeHtml(doc.title || '知识片段')}</div>
+            <div class="knowledge-title">${escapeHtml(doc.title || '资料片段')}</div>
             <p>${escapeHtml(doc.content)}</p>
             <div class="knowledge-meta">
               <span class="tag tag-blue">${DOC_TYPE_LABELS[doc.doc_type] || doc.doc_type}</span>
               <span class="tag tag-cold">score ${(doc.score || 0).toFixed(3)}</span>
             </div>
           </article>
-        `).join('') : '<div class="empty-state compact"><p>暂无命中结果</p><div class="hint">可以先新增相关知识文档。</div></div>'}
+        `).join('') : '<div class="empty-state compact"><p>暂无命中结果</p><div class="hint">可以先新增相关销售资料。</div></div>'}
       </div>
     `;
   } catch (error) {
     console.error(error);
-    resultEl.innerHTML = '<div class="card"><div class="empty-state compact"><p>检索失败</p><div class="hint">请检查知识库接口。</div></div></div>';
+    resultEl.innerHTML = '<div class="card"><div class="empty-state compact"><p>检索失败</p><div class="hint">请检查销售资料接口。</div></div></div>';
   }
 }
 
