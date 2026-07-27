@@ -7,6 +7,7 @@ WebSocket endpoint can stream the same Agent result without duplicating logic.
 
 import re
 import uuid
+import json
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -33,10 +34,13 @@ def process_chat_message(req: ChatRequest, db: Session) -> ChatResponse:
 
     _save_user_message(db, session_id, req.message)
 
+    previous_intent = _load_session_intent(db, session_id)
+
     state = SalesAgentState(
         session_id=session_id,
         customer_id=str(customer_id),
         user_message=req.message,
+        purchase_intent=previous_intent,
     )
 
     try:
@@ -54,6 +58,8 @@ def process_chat_message(req: ChatRequest, db: Session) -> ChatResponse:
     tool_trace = result.get("tool_trace", [])
     missing_slots = result.get("missing_slots", [])
     customer_profile = result.get("customer_profile", {})
+
+    _save_session_intent(db, session_id, purchase_intent)
 
     _save_agent_message(db, session_id, reply, tool_trace)
 
@@ -111,6 +117,36 @@ def _ensure_session(db: Session, customer_id: int, session_id: str) -> str:
     db.add(sess)
     db.commit()
     return new_id
+
+
+def _load_session_intent(db: Session, session_id: str) -> dict:
+    """Load short-term purchase intent saved on the conversation session."""
+    sess = db.query(ConversationSession).filter(
+        ConversationSession.session_id == session_id
+    ).first()
+    if not sess or not sess.summary:
+        return {}
+    try:
+        summary = json.loads(sess.summary)
+    except json.JSONDecodeError:
+        return {}
+    if isinstance(summary, dict):
+        intent = summary.get("purchase_intent", {})
+        return intent if isinstance(intent, dict) else {}
+    return {}
+
+
+def _save_session_intent(db: Session, session_id: str, purchase_intent: dict):
+    """Persist short-term purchase intent for the next turn in the same session."""
+    if not purchase_intent:
+        return
+    sess = db.query(ConversationSession).filter(
+        ConversationSession.session_id == session_id
+    ).first()
+    if not sess:
+        return
+    sess.summary = json.dumps({"purchase_intent": purchase_intent}, ensure_ascii=False)
+    db.commit()
 
 
 def _save_user_message(db: Session, session_id: str, content: str):

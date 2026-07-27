@@ -440,6 +440,15 @@ def response_node(state: SalesAgentState) -> dict:
     msg = state.get("user_message", "")
     purchase_intent = state.get("purchase_intent", {})
 
+    if state.get("final_response") and not results:
+        return {"final_response": state["final_response"]}
+
+    if results.get("search_cars"):
+        return {"final_response": _build_car_recommendation_reply(results["search_cars"], purchase_intent)}
+
+    if results.get("compare"):
+        return {"final_response": _build_compare_reply(results["compare"])}
+
     # 构建回复上下文
     context_parts = [f"客户消息：{msg}"]
 
@@ -490,6 +499,51 @@ def response_node(state: SalesAgentState) -> dict:
         pass
 
     return {"final_response": reply_text}
+
+
+def _build_car_recommendation_reply(cars: list[dict], purchase_intent: dict) -> str:
+    """根据车型搜索结果生成稳定推荐文案，避免模型脱离工具结果乱答。"""
+    if not cars:
+        return "按当前条件暂时没有匹配到合适车型。可以把预算、车型或能源偏好放宽一点，我再帮你筛。"
+
+    budget = purchase_intent.get("budget", "")
+    car_type = purchase_intent.get("car_type", "")
+    prefix_parts = [part for part in (budget, car_type) if part]
+    prefix = "、".join(prefix_parts)
+    title = f"按{prefix}这个方向，我会先看这几款：" if prefix else "我会先看这几款："
+
+    lines = [title, ""]
+    for index, car in enumerate(cars[:5], 1):
+        highlights = "、".join((car.get("highlights") or [])[:3])
+        price = car.get("price", 0)
+        price_text = f"{price / 10000:.1f}万" if price else "价格待确认"
+        fuel = car.get("fuel_consumption") or ""
+        detail_parts = [car.get("energy_type", ""), fuel, highlights]
+        detail = "，".join(part for part in detail_parts if part)
+        lines.append(f"{index}. **{car.get('model', '')}**：{price_text}，{detail}。")
+
+    lines.extend([
+        "",
+        "如果你更看重省油、空间、品牌可靠性或智能配置，我可以继续按这个方向帮你缩小到 1-2 款。",
+    ])
+    return "\n".join(lines)
+
+
+def _build_compare_reply(cars: list[dict]) -> str:
+    """根据对比工具结果生成稳定对比文案。"""
+    if not cars:
+        return "我还没匹配到要对比的车型。你可以直接说“对比宋PLUS和锋兰达”。"
+
+    lines = ["这几款车可以这样看：", ""]
+    for car in cars:
+        price = car.get("price", 0)
+        price_text = f"{price / 10000:.1f}万" if price else "价格待确认"
+        lines.append(
+            f"- **{car.get('model', '')}**：{price_text}，{car.get('energy_type', '')}，"
+            f"{car.get('recommendation', '')}"
+        )
+    lines.extend(["", "你更看重空间、用车成本，还是品牌稳定性？我可以按你的侧重点给结论。"])
+    return "\n".join(lines)
 
 
 def memory_write_node(state: SalesAgentState) -> dict:
