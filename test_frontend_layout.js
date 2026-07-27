@@ -9,6 +9,7 @@ const index = fs.readFileSync('frontend/index.html', 'utf8');
 const apiJs = fs.readFileSync('frontend/js/api.js', 'utf8');
 const dashboardHtml = fs.readFileSync('frontend/dashboard.html', 'utf8');
 const favicon = fs.readFileSync('frontend/favicon.svg', 'utf8');
+const carsJs = fs.readFileSync('frontend/js/cars.js', 'utf8');
 
 function assert(condition, message) {
   if (!condition) {
@@ -29,6 +30,7 @@ assert(css.includes('.stat-card .stat-label svg'), 'dashboard metric icons shoul
 assert(css.includes('.card-header svg'), 'dashboard card header icons should have a scoped size');
 assert(layout.includes('<span>汽车销售顾问</span>'), 'sidebar brand should use the Chinese product name');
 assert(layout.includes('brandMark'), 'sidebar should use the custom brand mark');
+assert(layout.includes('garage') || layout.includes('M4 18V9'), 'car library nav icon should look like a garage/library');
 assert(layout.includes("label: '概览'"), 'dashboard nav label should be fully Chinese');
 assert(layout.includes("href: '/dashboard.html'"), 'dashboard nav should open the real overview page');
 assert(dashboard.includes("initLayout('概览'"), 'dashboard topbar title should be fully Chinese');
@@ -47,6 +49,11 @@ assert(dashboardHtml.includes('/js/dashboard.js'), 'overview page should load th
 assert(layout.includes('id="model-badge"'), 'topbar model badge should be addressable');
 assert(apiJs.includes('initModelBadge'), 'frontend should sync the model badge from the backend');
 assert(apiJs.includes('/health'), 'frontend should read health status for provider display');
+assert(apiJs.includes('uploadKnowledge'), 'frontend API should support adding knowledge documents');
+assert(apiJs.includes("'/knowledge'"), 'frontend API should support listing knowledge documents');
+assert(carsJs.includes('车型数据') && carsJs.includes('知识文档') && carsJs.includes('检索测试'), 'cars page should expose car data and knowledge management tabs');
+assert(carsJs.includes('api.uploadKnowledge'), 'cars page should upload knowledge documents');
+assert(carsJs.includes('api.searchKnowledge'), 'cars page should test RAG retrieval');
 assert(chat.includes('new WebSocket'), 'chat should use websocket streaming for AI replies');
 assert(chat.includes('createStreamingAgentMessage'), 'chat should create an assistant bubble before streamed output arrives');
 assert(css.includes('.stream-thinking'), 'assistant bubble should show a thinking animation before the first streamed chunk');

@@ -69,6 +69,12 @@ const api = {
     },
 
     // 知识库
+    listKnowledge() {
+        return this.request('GET', '/knowledge');
+    },
+    uploadKnowledge(data) {
+        return this.request('POST', '/knowledge/upload', data);
+    },
     searchKnowledge(query, topK = 5) {
         return this.request('POST', '/knowledge/search', { query, top_k: topK });
     },

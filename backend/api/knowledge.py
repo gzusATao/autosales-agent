@@ -16,6 +16,32 @@ from backend.rag.rag import simple_vector_search
 router = APIRouter(prefix="/api/knowledge", tags=["知识库"])
 
 
+@router.get("")
+def list_knowledge(db: Session = Depends(get_db)):
+    """List knowledge documents with chunk counts for the management UI."""
+    rows = (
+        db.query(KnowledgeDocument)
+        .order_by(KnowledgeDocument.created_at.desc())
+        .all()
+    )
+    docs = []
+    for doc in rows:
+        chunks_count = (
+            db.query(KnowledgeChunk)
+            .filter(KnowledgeChunk.document_id == doc.id)
+            .count()
+        )
+        docs.append({
+            "id": doc.id,
+            "title": doc.title,
+            "doc_type": doc.doc_type,
+            "content": doc.content[:220],
+            "chunks_count": chunks_count,
+            "created_at": doc.created_at.isoformat() if doc.created_at else "",
+        })
+    return {"docs": docs}
+
+
 @router.post("/search", response_model=KnowledgeSearchResponse)
 def search_knowledge(req: KnowledgeSearchRequest):
     """检索知识库"""
