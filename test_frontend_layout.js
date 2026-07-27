@@ -51,9 +51,13 @@ assert(chat.includes('new WebSocket'), 'chat should use websocket streaming for 
 assert(chat.includes('createStreamingAgentMessage'), 'chat should create an assistant bubble before streamed output arrives');
 assert(css.includes('.stream-thinking'), 'assistant bubble should show a thinking animation before the first streamed chunk');
 assert(css.includes('@keyframes thinking-dot'), 'thinking animation should have a stable pulse keyframe');
+assert(css.includes('@media (max-width: 760px)'), 'mobile layout should have a dedicated phone breakpoint');
+assert(css.includes('grid-template-columns: repeat(6, minmax(0, 1fr))'), 'mobile sidebar should become bottom navigation');
+assert(css.includes('height: calc(100dvh - var(--topbar-h) - 84px)'), 'mobile chat should use dynamic viewport height');
 assert(html.includes('href="/favicon.svg"'), 'chat page should include the branded favicon');
 assert(dashboardHtml.includes('href="/favicon.svg"'), 'dashboard page should include the branded favicon');
 assert(favicon.includes('aria-label="汽车销售顾问"'), 'favicon should be branded for the product');
-assert(favicon.includes('mark-accent'), 'favicon should include the intelligent sales accent');
+assert(favicon.includes('M13 38h6l5-10'), 'favicon should read visually as a car outline');
+assert(favicon.includes('fill="#22c55e"'), 'favicon should include the intelligent sales accent');
 
 console.log('frontend layout checks passed');

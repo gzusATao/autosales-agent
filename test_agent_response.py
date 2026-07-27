@@ -63,7 +63,34 @@ def test_recommendation_response_uses_search_results_not_compare_script():
     assert "如果你更看重空间和用车成本" not in reply
 
 
+def test_compare_tesla_alias_uses_model_y():
+    from backend.database import init_db
+    from backend.seed_data import seed_all
+    from backend.agent.nodes import tool_executor
+
+    init_db()
+    seed_all()
+    state = {
+        "user_message": "对比特斯拉",
+        "current_intent": "car_compare",
+        "next_action": "compare_car",
+        "purchase_intent": {"budget": "20万以内", "car_type": "SUV"},
+        "tool_results": {},
+        "tool_trace": [],
+    }
+
+    result = tool_executor(state)
+    models = [car["model"] for car in result["tool_results"]["compare"]]
+    trace_models = result["tool_trace"][-1]["input"]["models"]
+
+    assert "Model Y" in models
+    assert "Model Y" in trace_models
+    assert trace_models != ["宋PLUS DM-i", "锋兰达双擎"]
+    assert len(models) >= 2
+
+
 if __name__ == "__main__":
     test_response_node_preserves_follow_up_question()
     test_recommendation_response_uses_search_results_not_compare_script()
+    test_compare_tesla_alias_uses_model_y()
     print("agent response checks passed")

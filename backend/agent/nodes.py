@@ -153,6 +153,57 @@ def slot_fill_node(state: SalesAgentState) -> dict:
     }
 
 
+def _extract_compare_models(message: str) -> list[str]:
+    """Extract supported car models from explicit model names or common brand aliases."""
+    normalized = message.lower()
+    alias_map = [
+        ("Model Y", ["model y", "特斯拉", "tesla"]),
+        ("小鹏G6", ["小鹏g6", "小鹏", "xpeng", "g6"]),
+        ("宋PLUS DM-i", ["宋plus dm-i", "宋plus", "比亚迪宋", "比亚迪", "宋"]),
+        ("锋兰达双擎", ["锋兰达双擎", "锋兰达", "丰田"]),
+        ("哈弗枭龙MAX", ["哈弗枭龙max", "枭龙max", "枭龙", "哈弗"]),
+        ("秦PLUS DM-i", ["秦plus dm-i", "秦plus", "比亚迪秦", "秦"]),
+        ("CR-V e:HEV", ["cr-v e:hev", "crv", "cr-v", "本田"]),
+        ("星越L", ["星越l", "星越", "吉利"]),
+    ]
+
+    found: list[str] = []
+    for model, aliases in alias_map:
+        if any(alias in normalized for alias in aliases):
+            found.append(model)
+    return found
+
+
+def _complete_compare_models(models: list[str], purchase_intent: dict) -> list[str]:
+    """When the user names only one car, add a sensible competitor for demo comparison."""
+    if len(models) >= 2:
+        return models[:4]
+
+    car_type = str(purchase_intent.get("car_type", ""))
+    budget = str(purchase_intent.get("budget", ""))
+    competitor_map = {
+        "Model Y": "小鹏G6",
+        "小鹏G6": "Model Y",
+        "宋PLUS DM-i": "锋兰达双擎",
+        "锋兰达双擎": "宋PLUS DM-i",
+        "哈弗枭龙MAX": "宋PLUS DM-i",
+        "秦PLUS DM-i": "宋PLUS DM-i",
+        "CR-V e:HEV": "锋兰达双擎",
+        "星越L": "锋兰达双擎",
+    }
+
+    if len(models) == 1:
+        model = models[0]
+        competitor = competitor_map.get(model, "宋PLUS DM-i")
+        return [model, competitor] if competitor != model else [model]
+
+    if "SUV" in car_type.upper():
+        return ["宋PLUS DM-i", "锋兰达双擎"]
+    if "10" in budget or "15" in budget:
+        return ["秦PLUS DM-i", "宋PLUS DM-i"]
+    return ["宋PLUS DM-i", "锋兰达双擎"]
+
+
 def route_node(state: SalesAgentState) -> dict:
     """路由节点 — 判断下一步该调用哪个工具"""
     action = state.get("next_action", "rag_search")
@@ -300,14 +351,10 @@ def tool_executor(state: SalesAgentState) -> dict:
         })
 
     elif action == "compare_car":
-        # 从消息中提取车型名
-        import re
-        # 匹配消息中的车型关键词
-        known_models = ["宋PLUS DM-i", "锋兰达双擎", "哈弗枭龙MAX", "秦PLUS DM-i",
-                        "CR-V e:HEV", "星越L", "Model Y", "小鹏G6"]
-        found = [m for m in known_models if m.lower() in msg]
-        if not found:
-            found = ["宋PLUS DM-i", "锋兰达双擎"]
+        found = _complete_compare_models(
+            _extract_compare_models(msg),
+            purchase_intent,
+        )
 
         compare_result = compare_car_tool(found)
         results["compare"] = compare_result.get("cars", [])
