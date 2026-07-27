@@ -4,6 +4,7 @@
  */
 
 const Icons = {
+  brandMark: `<svg class="brand-mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="brand-bg" x1="12" y1="8" x2="54" y2="58" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2563eb"/><stop offset="1" stop-color="#0f172a"/></linearGradient><linearGradient id="brand-accent" x1="18" y1="20" x2="48" y2="44" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#93c5fd"/><stop offset="1" stop-color="#22c55e"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="url(#brand-bg)"/><path d="M17 39v-7.5c0-1.1.36-2.16 1.03-3.03l5.12-6.66A5 5 0 0 1 27.11 20h13.78a5 5 0 0 1 3.96 1.81l5.12 6.66A5 5 0 0 1 51 31.5V39" fill="none" stroke="#f8fafc" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 31h16" stroke="url(#brand-accent)" stroke-width="4" stroke-linecap="round"/><circle cx="23" cy="40" r="4.5" fill="#f8fafc"/><circle cx="47" cy="40" r="4.5" fill="#f8fafc"/><rect x="37" y="28" width="10" height="10" rx="2.5" fill="url(#brand-accent)"/><path d="M42 24v4m0 10v4m-8-9h4m10 0h4" stroke="#bfdbfe" stroke-width="2" stroke-linecap="round"/></svg>`,
   dashboard: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>`,
   chat: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
   car: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17a2 2 0 0 1-2-2V9.5l3-4h12l3 4V15a2 2 0 0 1-2 2"/><circle cx="7" cy="15" r="2"/><circle cx="17" cy="15" r="2"/></svg>`,
@@ -51,7 +52,7 @@ function renderSidebar(activePage) {
   return `
     <aside class="sidebar">
       <div class="sidebar-brand">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17a2 2 0 0 1-2-2V9.5l3-4h12l3 4V15a2 2 0 0 1-2 2"/><circle cx="7" cy="15" r="2"/><circle cx="17" cy="15" r="2"/></svg>
+        ${Icons.brandMark}
         <span>汽车销售顾问</span>
       </div>
       <nav class="sidebar-nav">

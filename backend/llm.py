@@ -1,6 +1,5 @@
 """
-LLM 调用封装
-支持 DeepSeek（通过兼容 OpenAI SDK）、mock 模式
+LLM client wrapper with a deterministic mock fallback.
 """
 
 import json
@@ -8,31 +7,25 @@ import re
 from typing import Optional
 
 from openai import OpenAI
+
 from backend.config import settings
 
-
-# DeepSeek 客户端
 _client: Optional[OpenAI] = None
 
 
-def get_llm_client() -> OpenAI:
-    """获取 LLM 客户端（单例）"""
+def get_llm_client() -> Optional[OpenAI]:
+    """Return an OpenAI-compatible client, or None when credentials are absent."""
     global _client
     if _client is not None:
         return _client
 
-    if settings.LLM_PROVIDER == "deepseek":
-        _client = OpenAI(
-            api_key=settings.OPENAI_API_KEY,
-            base_url=settings.OPENAI_BASE_URL or "https://api.deepseek.com",
-        )
-    elif settings.LLM_PROVIDER == "openai":
-        _client = OpenAI(
-            api_key=settings.OPENAI_API_KEY,
-            base_url=settings.OPENAI_BASE_URL or "https://api.openai.com/v1",
-        )
-    else:
-        _client = None  # mock 模式
+    if settings.LLM_PROVIDER not in ("deepseek", "openai") or not settings.OPENAI_API_KEY:
+        return None
+
+    _client = OpenAI(
+        api_key=settings.OPENAI_API_KEY,
+        base_url=settings.OPENAI_BASE_URL or "https://api.deepseek.com",
+    )
     return _client
 
 
@@ -42,56 +35,45 @@ def chat_completion(
     response_format: Optional[dict] = None,
     temperature: float = 0.1,
 ) -> str:
-    """
-    调用 LLM 获取回复
-    支持 deepseek / openai / mock 三种模式
-    """
-    if settings.LLM_PROVIDER in ("deepseek", "openai"):
-        client = get_llm_client()
-        if client is None:
-            return _mock_llm_response(system_prompt, user_message)
+    """Call the configured model, falling back to mock output for local demos."""
+    client = get_llm_client()
+    if client is None:
+        return _mock_llm_response(system_prompt, user_message)
 
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message},
-        ]
-        kwargs = {
-            "model": settings.OPENAI_MODEL,
-            "messages": messages,
-            "temperature": temperature,
-        }
-        if response_format:
-            kwargs["response_format"] = response_format
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_message},
+    ]
+    kwargs = {
+        "model": settings.OPENAI_MODEL,
+        "messages": messages,
+        "temperature": temperature,
+    }
+    if response_format:
+        kwargs["response_format"] = response_format
 
-        try:
-            resp = client.chat.completions.create(**kwargs)
-            return resp.choices[0].message.content or ""
-        except Exception as e:
-            print(f"[LLM Error] {e}")
-            return _mock_llm_response(system_prompt, user_message)
-
-    # Mock 模式
-    return _mock_llm_response(system_prompt, user_message)
+    try:
+        resp = client.chat.completions.create(**kwargs)
+        return resp.choices[0].message.content or ""
+    except Exception as exc:
+        print(f"[LLM Error] {exc}")
+        return _mock_llm_response(system_prompt, user_message)
 
 
 def extract_json(text: str) -> dict:
-    """从 LLM 回复中提取 JSON"""
-    # 尝试直接解析
-    text = text.strip()
-    # 移除 markdown 代码块标记
+    """Extract the outer JSON object from an LLM response."""
+    text = (text or "").strip()
     text = re.sub(r"^```(?:json)?\s*", "", text)
     text = re.sub(r"\s*```$", "", text)
 
-    # 查找最外层的 { }
     brace_start = text.find("{")
     brace_end = text.rfind("}")
     if brace_start != -1 and brace_end != -1 and brace_end > brace_start:
-        text = text[brace_start : brace_end + 1]
+        text = text[brace_start:brace_end + 1]
 
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        # 清理不可见字符后重试
         cleaned = re.sub(r"[\x00-\x1f]", "", text)
         try:
             return json.loads(cleaned)
@@ -100,140 +82,125 @@ def extract_json(text: str) -> dict:
 
 
 def _mock_llm_response(system_prompt: str, user_message: str) -> str:
-    """
-    Mock LLM 响应 — 基于关键词规则返回结构化结果
-    用于无 API key 时的演示
-    """
+    prompt = system_prompt.lower()
     msg = user_message.lower()
 
-    # 意图识别 mock
-    if "意图识别" in system_prompt or "intent" in system_prompt.lower():
+    if "intent" in prompt or "意图" in system_prompt:
         return _mock_intent(msg)
-
-    # 回复生成 mock
-    if "回复生成" in system_prompt or "销售回复" in system_prompt:
-        return _mock_reply(msg)
-
-    # 记忆更新 mock
-    if "记忆更新" in system_prompt or "跟进摘要" in system_prompt:
+    if "记忆" in system_prompt or "memory" in prompt:
         return _mock_memory_update(msg)
-
-    return json.dumps({"reply": f"收到您的消息：{user_message}，请问还有什么可以帮您？"})
+    return _mock_reply(msg)
 
 
 def _mock_intent(msg: str) -> str:
-    """模拟意图识别"""
     intent = "general_question"
     slots = {"budget": "", "car_type": "", "energy_type": "", "usage": "", "purchase_time": ""}
     missing = ["budget", "car_type", "energy_type", "usage"]
 
-    # 预算
     budget_match = re.search(r"(\d+)\s*万", msg)
     if budget_match:
         slots["budget"] = f"{budget_match.group(1)}万以内"
-        missing = [s for s in missing if s != "budget"]
+        missing.remove("budget")
 
-    # 车型
-    if re.search(r"suv|越野|城市越野", msg):
+    if re.search(r"suv|越野|家用车", msg):
         slots["car_type"] = "SUV"
-        missing = [s for s in missing if s != "car_type"]
-    elif re.search(r"轿车|小轿车|三厢", msg):
+        missing.remove("car_type")
+    elif re.search(r"轿车|小车", msg):
         slots["car_type"] = "轿车"
-        missing = [s for s in missing if s != "car_type"]
+        missing.remove("car_type")
 
-    # 能源
-    if re.search(r"混动|油电混合|插混|双擎", msg):
+    if re.search(r"混动|插混|省油", msg):
         slots["energy_type"] = "混动"
-        missing = [s for s in missing if s != "energy_type"]
-    elif re.search(r"纯电|电动|电车", msg):
+        missing.remove("energy_type")
+    elif re.search(r"纯电|电车", msg):
         slots["energy_type"] = "纯电"
-        missing = [s for s in missing if s != "energy_type"]
-    elif re.search(r"燃油|汽油|油车", msg):
+        missing.remove("energy_type")
+    elif re.search(r"燃油|油车", msg):
         slots["energy_type"] = "燃油"
-        missing = [s for s in missing if s != "energy_type"]
+        missing.remove("energy_type")
 
-    # 用途
-    if re.search(r"家用|家庭|代步|接送|孩子|小孩|老人", msg):
+    if re.search(r"家用|家庭|通勤|接送", msg):
         slots["usage"] = "家用"
-        missing = [s for s in missing if s != "usage"]
-    elif re.search(r"商务|办公|公司|接待", msg):
+        missing.remove("usage")
+    elif re.search(r"商务|接待|公司", msg):
         slots["usage"] = "商务"
-        missing = [s for s in missing if s != "usage"]
+        missing.remove("usage")
 
-    # 购车时间
-    if re.search(r"一个月|本月|这个月|尽快|最近|这个月", msg):
-        slots["purchase_time"] = "1个月内"
-    elif re.search(r"三个月|半年|不急|看看|了解", msg):
-        slots["purchase_time"] = "3个月内"
-
-    # intent 判断
-    if re.search(r"对比|哪个好|怎么选|区别|vs|和.*比", msg):
+    if re.search(r"对比|区别|哪个好|vs", msg):
         intent = "car_compare"
-    elif re.search(r"首付|月供|贷款|分期|按揭|利息", msg):
+    elif re.search(r"月供|首付|贷款|分期", msg):
         intent = "loan_calculation"
-    elif re.search(r"现车|库存|有车吗|什么时候能提", msg):
+    elif re.search(r"现车|库存|有车", msg):
         intent = "inventory_query"
-    elif re.search(r"试驾|试车|体验|开一开", msg):
+    elif re.search(r"试驾|试车|预约", msg):
         intent = "test_drive"
-    elif re.search(r"预算|推荐|买.*车|推荐.*车|什么车|选择", msg) or slots["budget"]:
+    elif re.search(r"推荐|预算|买.*车|什么车", msg) or slots["budget"]:
         intent = "car_recommendation"
 
     return json.dumps({
         "intent": intent,
         "slots": slots,
         "missing_slots": missing,
-        "confidence": 0.85,
-    })
+        "confidence": 0.86,
+    }, ensure_ascii=False)
 
 
 def _mock_reply(msg: str) -> str:
-    """模拟销售回复"""
     if "对比" in msg or "哪个好" in msg:
-        return json.dumps({
-            "reply": "根据对比结果，宋PLUS DM-i 在空间和油耗方面更有优势，适合家用；锋兰达双擎在品牌保值率方面更胜一筹。建议您根据侧重点选择，如果注重空间和省油，宋PLUS DM-i 性价比更高。需要帮您算算分期月供吗？",
-        })
-    if "月供" in msg or "首付" in msg or "分期" in msg:
-        return json.dumps({
-            "reply": "以宋PLUS DM-i 16.98万为例，首付30%即5.09万，贷款3年，年利率4.5%，月供约3,748元。您看这个预算合适吗？需要帮您查一下附近门店的现车情况吗？",
-        })
-    if "现车" in msg or "库存" in msg:
-        return json.dumps({
-            "reply": "广州天河体验店目前有白色宋PLUS DM-i 现车，3天内可提车。如果您想要其他颜色，也可以帮您查询调货时间。要预约试驾感受一下吗？",
-        })
-    if "试驾" in msg:
-        return json.dumps({
-            "reply": "好的，已为您预约周六下午3点广州天河体验店的宋PLUS DM-i 试驾。预约编号：TD202607270001。届时会有专业顾问接待您，请问还有其他需要吗？",
-        })
-    if re.search(r"20万.*SUV|SUV.*20万|家用.*SUV", msg):
-        return json.dumps({
-            "reply": "根据您的预算和需求，我重点推荐以下三款混动SUV：\n\n1. **比亚迪宋PLUS DM-i** — 16.98万，插电混动，油耗低至4.4L/100km，空间宽敞，非常适合家用。\n2. **丰田锋兰达双擎** — 17.98万起，油电混动，丰田品质，油耗4.5L/100km。\n3. **哈弗枭龙MAX** — 18.98万，插电混动四驱，配置丰富。\n\n这三款您对哪款比较感兴趣？我可以帮您详细对比一下。",
-        })
-    return json.dumps({
-        "reply": f"好的，已收到您的需求。请问您对车型有什么具体要求，比如预算范围、车型级别（SUV/轿车）和能源类型（燃油/混动/纯电）？我可以为您做精准推荐。",
-    })
+        reply = (
+            "这两款定位不太一样：\n\n"
+            "**宋PLUS DM-i** 更适合家用和通勤，空间宽，油耗低，配置给得比较足。\n"
+            "**锋兰达双擎** 更偏稳定省心，品牌口碑和长期可靠性更好。\n\n"
+            "如果你更看重空间和用车成本，我会优先推荐宋PLUS DM-i；如果更看重品牌稳定性，锋兰达更稳。"
+        )
+    elif "月供" in msg or "首付" in msg or "分期" in msg:
+        reply = (
+            "按 16.98 万车型估算，首付 30% 约 5.09 万，贷款 3 年，月供大概 3700 元左右。\n\n"
+            "这个只是演示试算，实际月供要看裸车价、保险、购置税、金融利率和门店政策。"
+        )
+    elif "现车" in msg or "库存" in msg:
+        reply = (
+            "广州天河体验店当前有宋PLUS DM-i 白色现车，正常 3 天内可提。\n\n"
+            "如果你想看其他颜色，我可以继续按门店库存帮你查。"
+        )
+    elif "试驾" in msg:
+        reply = (
+            "已按演示流程生成试驾预约：周六下午 3 点，广州天河体验店，车型宋PLUS DM-i。\n\n"
+            "到店前可以再确认一次手机号和具体门店。"
+        )
+    elif "20万" in msg and "suv" in msg:
+        reply = (
+            "20 万以内家用 SUV，我会先看这三款：\n\n"
+            "1. **宋PLUS DM-i**：空间大、油耗低，适合家用通勤。\n"
+            "2. **锋兰达双擎**：可靠性和品牌口碑更稳。\n"
+            "3. **哈弗枭龙MAX**：配置丰富，适合想要四驱和科技配置的用户。\n\n"
+            "你更在意省油、空间，还是品牌可靠性？我可以按这个方向继续缩小范围。"
+        )
+    else:
+        reply = (
+            "可以，我先帮你把需求拆一下。你补充预算、车型偏好和主要用途后，"
+            "我就能结合车型库给出更具体的推荐。"
+        )
+
+    return json.dumps({"reply": reply}, ensure_ascii=False)
 
 
 def _mock_memory_update(msg: str) -> str:
-    """模拟记忆更新"""
     concerns = []
     if "省油" in msg:
         concerns.append("油耗")
-    if "空间" in msg or "后排" in msg:
+    if "空间" in msg or "家用" in msg:
         concerns.append("空间")
-    if "安全" in msg:
-        concerns.append("安全性")
-    if "配置" in msg:
-        concerns.append("配置")
-    if "品牌" in msg:
-        concerns.append("品牌")
+    if "品牌" in msg or "可靠" in msg:
+        concerns.append("品牌可靠性")
 
     return json.dumps({
         "budget": "",
-        "usage": "",
-        "energy_type": "",
-        "concerns": concerns if concerns else ["油耗"],
+        "usage": "家用" if "家用" in msg else "",
+        "energy_type": "混动" if "混动" in msg or "省油" in msg else "",
+        "concerns": concerns,
         "intent_models": [],
         "purchase_time": "",
-        "follow_up_summary": f"客户咨询：{msg[:50]}..." if len(msg) > 50 else f"客户咨询：{msg}",
+        "follow_up_summary": f"客户咨询：{msg[:50]}",
         "lead_level": "中意向",
-    })
+    }, ensure_ascii=False)

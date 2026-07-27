@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="汽车销售顾问">
+  <defs>
+    <linearGradient id="mark-bg" x1="12" y1="8" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="mark-accent" x1="18" y1="20" x2="48" y2="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#93c5fd"/>
+      <stop offset="1" stop-color="#22c55e"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#mark-bg)"/>
+  <path d="M17 39v-7.5c0-1.1.36-2.16 1.03-3.03l5.12-6.66A5 5 0 0 1 27.11 20h13.78a5 5 0 0 1 3.96 1.81l5.12 6.66A5 5 0 0 1 51 31.5V39" fill="none" stroke="#f8fafc" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M24 31h16" stroke="url(#mark-accent)" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="23" cy="40" r="4.5" fill="#f8fafc"/>
+  <circle cx="47" cy="40" r="4.5" fill="#f8fafc"/>
+  <rect x="37" y="28" width="10" height="10" rx="2.5" fill="url(#mark-accent)"/>
+  <path d="M42 24v4m0 10v4m-8-9h4m10 0h4" stroke="#bfdbfe" stroke-width="2" stroke-linecap="round"/>
+</svg>

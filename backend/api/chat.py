@@ -1,57 +1,60 @@
 """
-对话 API
-处理客户消息，运行 Agent 流程并返回回复
+Chat API.
+
+Keeps the normal HTTP endpoint and exposes a shared processing function so the
+WebSocket endpoint can stream the same Agent result without duplicating logic.
 """
 
-import datetime
+import re
 import uuid
-from fastapi import APIRouter, Depends, HTTPException
+
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from backend.database import get_db
-from backend.models.models import Customer, ConversationSession
-from backend.agent.state import SalesAgentState
 from backend.agent.graph import run_agent
+from backend.agent.state import SalesAgentState
+from backend.database import get_db
+from backend.models.models import ConversationSession, Customer
 from backend.schemas.schemas import ChatRequest, ChatResponse, ToolTraceItem
 
-router = APIRouter(prefix="/api/chat", tags=["对话"])
+router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
 @router.post("/message", response_model=ChatResponse)
 def chat_message(req: ChatRequest, db: Session = Depends(get_db)):
-    """处理用户消息并返回 Agent 回复"""
+    """Handle one user message and return the full Agent response."""
+    return process_chat_message(req, db)
 
-    # 确保客户存在
+
+def process_chat_message(req: ChatRequest, db: Session) -> ChatResponse:
+    """Run one chat turn. Shared by HTTP and WebSocket transports."""
     customer_id = _ensure_customer(db, req)
-    # 确保会话存在
     session_id = _ensure_session(db, customer_id, req.session_id)
 
-    # 保存用户消息
     _save_user_message(db, session_id, req.message)
 
-    # 构建 Agent 状态
     state = SalesAgentState(
         session_id=session_id,
         customer_id=str(customer_id),
         user_message=req.message,
     )
 
-    # 运行 Agent
     try:
         result = run_agent(state)
-    except Exception as e:
-        print(f"[Agent Error] {e}")
+    except Exception as exc:
+        print(f"[Agent Error] {exc}")
         result = state
-        result["final_response"] = "抱歉，我现在遇到了一些技术问题，请稍后再试。"
+        result["final_response"] = "抱歉，我这边遇到了一点技术问题，请稍后再试。"
 
-    reply = result.get("final_response", "感谢您的咨询，请问还有什么可以帮助您的？")
+    reply = _polish_reply(
+        result.get("final_response") or "收到，您可以再补充一下预算、车型或用途，我继续帮您分析。"
+    )
     intent = result.get("current_intent", "")
     purchase_intent = result.get("purchase_intent", {})
     tool_trace = result.get("tool_trace", [])
     missing_slots = result.get("missing_slots", [])
     customer_profile = result.get("customer_profile", {})
 
-    # 保存 Agent 回复
     _save_agent_message(db, session_id, reply, tool_trace)
 
     return ChatResponse(
@@ -75,7 +78,7 @@ def chat_message(req: ChatRequest, db: Session = Depends(get_db)):
 
 
 def _ensure_customer(db: Session, req: ChatRequest) -> int:
-    """确保客户存在，返回 customer_id"""
+    """Ensure the customer exists and return customer_id."""
     if req.customer_id:
         try:
             cid = int(req.customer_id)
@@ -85,7 +88,6 @@ def _ensure_customer(db: Session, req: ChatRequest) -> int:
         except ValueError:
             pass
 
-    # 创建新客户
     customer = Customer(name="", phone="")
     db.add(customer)
     db.flush()
@@ -93,7 +95,7 @@ def _ensure_customer(db: Session, req: ChatRequest) -> int:
 
 
 def _ensure_session(db: Session, customer_id: int, session_id: str) -> str:
-    """确保会话存在，返回 session_id"""
+    """Ensure the conversation session exists and return session_id."""
     if session_id:
         sess = db.query(ConversationSession).filter(
             ConversationSession.session_id == session_id
@@ -101,7 +103,6 @@ def _ensure_session(db: Session, customer_id: int, session_id: str) -> str:
         if sess:
             return sess.session_id
 
-    # 创建新会话
     new_id = session_id or f"S{uuid.uuid4().hex[:8].upper()}"
     sess = ConversationSession(
         session_id=new_id,
@@ -113,8 +114,9 @@ def _ensure_session(db: Session, customer_id: int, session_id: str) -> str:
 
 
 def _save_user_message(db: Session, session_id: str, content: str):
-    """保存用户消息"""
+    """Persist a user message."""
     from backend.models.models import ConversationMessage
+
     msg = ConversationMessage(
         session_id=session_id,
         role="user",
@@ -125,8 +127,9 @@ def _save_user_message(db: Session, session_id: str, content: str):
 
 
 def _save_agent_message(db: Session, session_id: str, content: str, tool_trace: list):
-    """保存 Agent 回复"""
+    """Persist an assistant message."""
     from backend.models.models import ConversationMessage
+
     msg = ConversationMessage(
         session_id=session_id,
         role="assistant",
@@ -135,3 +138,23 @@ def _save_agent_message(db: Session, session_id: str, content: str, tool_trace: 
     )
     db.add(msg)
     db.commit()
+
+
+def _polish_reply(reply: str) -> str:
+    """Remove repetitive sales-script openings from LLM output."""
+    cleaned = (reply or "").strip()
+    repetitive_patterns = [
+        r"^您好[！!，,。\s]*感谢您的(?:咨询|关注)[！!，,。\s]*",
+        r"^作为您的(?:汽车)?销售顾问[，,。\s]*",
+        r"^我是(?:您的)?(?:汽车)?销售顾问[，,。\s]*",
+        r"^很高兴为您服务[！!，,。\s]*",
+        r"^非常乐意为您(?:推荐|服务)[^。！？!?]*[。！？!?]\s*",
+    ]
+
+    previous = None
+    while previous != cleaned:
+        previous = cleaned
+        for pattern in repetitive_patterns:
+            cleaned = re.sub(pattern, "", cleaned).strip()
+
+    return cleaned or reply

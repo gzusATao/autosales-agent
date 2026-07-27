@@ -187,7 +187,7 @@ def ask_question_node(state: SalesAgentState) -> dict:
     if not questions:
         questions.append("请问您对车型还有哪些具体要求？我可以帮您做精准推荐。")
 
-    reply = "感谢您的咨询！为了更好地推荐适合您的车型，想先了解一下：\n" + "\n".join(f"- {q}" for q in questions[:3])
+    reply = "要推荐得更准，我还需要确认这几项：\n" + "\n".join(f"- {q}" for q in questions[:3])
 
     return {"final_response": reply}
 
