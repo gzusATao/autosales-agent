@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 销售对话 — 汽车销售顾问</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="app-layout" id="app-root">
+    <!-- 由 layout.js 注入侧边栏和顶栏 -->
+    <div class="main-wrapper">
+        <header class="topbar" id="topbar-placeholder"></header>
+        <main class="content" id="app-content" style="padding-top:0;max-width:none;height:calc(100vh - var(--topbar-h));overflow:hidden;">
+            <div class="chat-layout-new">
+                <!-- 对话区 -->
+                <div class="chat-main">
+                    <div class="chat-messages" id="chat-messages">
+                        <div class="message assistant">
+                            <div class="message-avatar assistant-avatar" aria-label="AI 智能销售"></div>
+                            <div class="message-content">
+                                <div class="msg-subtitle">欢迎</div>
+                                <div class="msg-body"><p>您好！我是 <strong>汽车销售顾问</strong>，很高兴为您服务。</p><p>请告诉我您的购车需求，比如预算、车型偏好和用途，我会为您做精准推荐。</p></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="agent-thinking" class="agent-thinking" style="display:none;">
+                        <div class="dot-pulse"><span></span><span></span><span></span></div>
+                        <span id="thinking-text">Agent 正在分析需求...</span>
+                    </div>
+
+                    <div class="chat-input-area">
+                        <div class="chat-quick-actions">
+                            <button class="btn btn-sm btn-outline" id="btn-recommend">推荐车型</button>
+                            <button class="btn btn-sm btn-outline" id="btn-compare">对比车型</button>
+                            <button class="btn btn-sm btn-outline" id="btn-loan">分期试算</button>
+                            <button class="btn btn-sm btn-outline" id="btn-inventory">查库存</button>
+                            <button class="btn btn-sm btn-outline" id="btn-drive">预约试驾</button>
+                        </div>
+                        <div class="chat-input-row">
+                            <input type="text" id="chat-input" placeholder="输入您的购车需求..." autofocus>
+                            <button id="chat-send">发送</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Agent 面板 -->
+                <div class="agent-panel" id="agent-panel">
+                    <div class="agent-panel-section">
+                        <h3>当前意图</h3>
+                        <div id="panel-intent"><span class="text-muted">等待识别...</span></div>
+                        <div class="mt-2"><h3>销售阶段</h3>
+                        <div id="panel-stage"><span class="tag tag-cold">新对话</span></div></div>
+                    </div>
+                    <div class="agent-panel-section">
+                        <h3>已识别需求</h3>
+                        <div id="panel-slots"><div class="text-muted" style="font-size:13px;">等待客户输入...</div></div>
+                    </div>
+                    <div class="agent-panel-section">
+                        <h3>缺失字段</h3>
+                        <div id="panel-missing"><span class="text-muted" style="font-size:13px;">待识别</span></div>
+                    </div>
+                    <div class="agent-panel-section">
+                        <h3>⬡ LangGraph 流程</h3>
+                        <div id="panel-graph" class="agent-graph">
+                            <div class="graph-node pending"><span class="node-status"></span><span class="node-label">IntentNode</span></div>
+                            <div class="graph-node pending"><span class="node-status"></span><span class="node-label">MemoryLoadNode</span></div>
+                            <div class="graph-node pending"><span class="node-status"></span><span class="node-label">SlotFillNode</span></div>
+                            <div class="graph-node pending"><span class="node-status"></span><span class="node-label">RouteNode</span></div>
+                            <div class="graph-node pending"><span class="node-status"></span><span class="node-label">ToolNode</span></div>
+                            <div class="graph-node pending"><span class="node-status"></span><span class="node-label">ResponseNode</span></div>
+                            <div class="graph-node pending"><span class="node-status"></span><span class="node-label">MemoryWriteNode</span></div>
+                        </div>
+                    </div>
+                    <div class="agent-panel-section">
+                        <h3>工具调用轨迹</h3>
+                        <div id="panel-tools"><div class="text-muted" style="font-size:13px;">等待工具调用...</div></div>
+                    </div>
+                    <div class="agent-panel-section">
+                        <h3>客户画像摘要</h3>
+                        <div id="panel-profile"><div class="text-muted" style="font-size:13px;">等待对话...</div></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+<script src="/js/api.js"></script>
+<script src="/js/layout.js"></script>
+<script src="/js/chat.js"></script>
+</body>
+</html>

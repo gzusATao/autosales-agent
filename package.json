@@ -1,0 +1,10 @@
+{
+  "name": "autosales-agent",
+  "version": "1.0.0",
+  "description": "AutoLead Agent - 汽车销售线索转化系统",
+  "scripts": {
+    "start": "uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload",
+    "dev": "uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload",
+    "docker": "docker-compose up -d"
+  }
+}

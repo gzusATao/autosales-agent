@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: autosales-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./data/autosales.db
+      - LLM_PROVIDER=${LLM_PROVIDER:-deepseek}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.deepseek.com}
+      - OPENAI_MODEL=${OPENAI_MODEL:-deepseek-chat}
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: autosales-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  # 可选: PostgreSQL (生产环境)
+  # postgres:
+  #   image: pgvector/pgvector:pg16
+  #   container_name: autosales-postgres
+  #   environment:
+  #     POSTGRES_DB: autosales
+  #     POSTGRES_USER: autosales
+  #     POSTGRES_PASSWORD: autosales123
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+  #   restart: unless-stopped
+
+volumes:
+  pgdata:
