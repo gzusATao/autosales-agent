@@ -296,15 +296,24 @@ function renderKnowledgeList() {
     return;
   }
 
+  el.className = 'knowledge-grid';
   el.innerHTML = knowledgeDocs.map(doc => `
     <article class="knowledge-item">
+      <div class="knowledge-icon" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
+          <path d="M14 3v5h5"/>
+          <path d="M8.5 12h7"/>
+          <path d="M8.5 15h5.5"/>
+        </svg>
+      </div>
       <div class="knowledge-item-main">
         <div class="knowledge-title">${escapeHtml(doc.title)}</div>
         <div class="knowledge-preview">${escapeHtml(doc.content || '')}</div>
-      </div>
-      <div class="knowledge-meta">
-        <span class="tag tag-blue">${DOC_TYPE_LABELS[doc.doc_type] || doc.doc_type}</span>
-        <span class="tag tag-cold">${doc.chunks_count || 0} 个切片</span>
+        <div class="knowledge-meta">
+          <span class="tag tag-blue">${DOC_TYPE_LABELS[doc.doc_type] || doc.doc_type}</span>
+          <span class="tag tag-cold">${doc.chunks_count || 0} 个切片</span>
+        </div>
       </div>
     </article>
   `).join('');
