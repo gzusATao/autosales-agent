@@ -159,6 +159,9 @@ class AgentRunMetric(Base):
     tool_names = Column(JSON, default=list)
     failed_tool_names = Column(JSON, default=list)
     error_type = Column(String(64), default="", index=True)
+    feedback_id = Column(Integer, default=0, index=True)
+    feedback_rating = Column(String(16), default="", index=True)
+    feedback_reason = Column(String(64), default="", index=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
 
 

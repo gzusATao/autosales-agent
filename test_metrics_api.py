@@ -23,6 +23,7 @@ def test_agent_metrics_reports_runtime_feedback_rag_and_tool_health():
                 tool_names=["search_car_tool"],
                 failed_tool_names=[],
                 error_type="",
+                feedback_rating="good",
             ),
             AgentRunMetric(
                 session_id="SMETRIC02",
@@ -34,6 +35,8 @@ def test_agent_metrics_reports_runtime_feedback_rag_and_tool_health():
                 tool_names=["rag_search_tool"],
                 failed_tool_names=["rag_search_tool"],
                 error_type="tool_fallback",
+                feedback_rating="bad",
+                feedback_reason="material_missing",
             ),
         ]
         created_feedbacks = [
@@ -90,6 +93,64 @@ def test_agent_metrics_reports_runtime_feedback_rag_and_tool_health():
         db.close()
 
 
+def test_feedback_submission_updates_agent_run_metric():
+    from backend.models.models import AgentFeedback, AgentRunMetric
+
+    init_db()
+    db = SessionLocal()
+    metric = AgentRunMetric(
+        session_id="SFEEDBACK01",
+        customer_id="88",
+        question="瑞虎8多少钱",
+        intent="rag_answer",
+        success=True,
+        response_time_ms=900,
+        tool_names=["rag_search_tool"],
+        failed_tool_names=[],
+    )
+    db.add(metric)
+    db.commit()
+    feedback_id = None
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/feedback",
+            json={
+                "session_id": "SFEEDBACK01",
+                "customer_id": "88",
+                "question": "瑞虎8多少钱",
+                "answer": "目前没有“瑞虎8”相关资料。",
+                "intent": "rag_answer",
+                "rating": "bad",
+                "reason": "资料不足",
+                "tool_trace": [
+                    {
+                        "tool_name": "rag_search_tool",
+                        "input": {"query": "瑞虎8多少钱"},
+                        "output": {"docs_count": 0},
+                        "timestamp": "",
+                    }
+                ],
+            },
+        )
+
+        assert response.status_code == 200
+        feedback_id = response.json()["id"]
+        db.refresh(metric)
+        assert metric.feedback_id == feedback_id
+        assert metric.feedback_rating == "bad"
+        assert metric.feedback_reason == "资料不足"
+    finally:
+        if feedback_id:
+            feedback = db.query(AgentFeedback).filter(AgentFeedback.id == feedback_id).first()
+            if feedback:
+                db.delete(feedback)
+        db.delete(metric)
+        db.commit()
+        db.close()
+
+
 if __name__ == "__main__":
     test_agent_metrics_reports_runtime_feedback_rag_and_tool_health()
+    test_feedback_submission_updates_agent_run_metric()
     print("metrics api checks passed")

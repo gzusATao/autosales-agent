@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models.models import AgentFeedback
+from backend.models.models import AgentFeedback, AgentRunMetric
 from backend.schemas.schemas import (
     FeedbackCreate,
     FeedbackCreateResponse,
@@ -37,6 +37,7 @@ def create_feedback(req: FeedbackCreate, db: Session = Depends(get_db)):
     db.add(feedback)
     db.commit()
     db.refresh(feedback)
+    _sync_feedback_to_run_metric(db, req, feedback)
     return FeedbackCreateResponse(id=feedback.id)
 
 
@@ -109,6 +110,35 @@ def _extract_rag_chunks(tool_trace: list[dict]) -> list[dict]:
                 "doc_type": doc.get("doc_type", ""),
             })
     return chunks[:10]
+
+
+def _sync_feedback_to_run_metric(db: Session, req: FeedbackCreate, feedback: AgentFeedback):
+    """Attach user feedback to the matching Agent run metric row."""
+    query = db.query(AgentRunMetric)
+    if req.session_id:
+        query = query.filter(AgentRunMetric.session_id == req.session_id)
+    if req.customer_id:
+        query = query.filter(AgentRunMetric.customer_id == req.customer_id)
+    if req.question:
+        query = query.filter(AgentRunMetric.question == req.question)
+    if req.intent:
+        query = query.filter(AgentRunMetric.intent == req.intent)
+
+    metric = query.order_by(AgentRunMetric.created_at.desc()).first()
+    if not metric and req.session_id:
+        metric = (
+            db.query(AgentRunMetric)
+            .filter(AgentRunMetric.session_id == req.session_id)
+            .order_by(AgentRunMetric.created_at.desc())
+            .first()
+        )
+    if not metric:
+        return
+
+    metric.feedback_id = feedback.id
+    metric.feedback_rating = req.rating
+    metric.feedback_reason = req.reason if req.rating == "bad" else ""
+    db.commit()
 
 
 def _build_suggestions(
