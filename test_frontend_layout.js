@@ -59,7 +59,8 @@ assert(carsJs.includes('accept=".pdf,.txt,.docx,.md"'), 'knowledge upload should
 assert(carsJs.includes('api.searchKnowledge'), 'cars page should test RAG retrieval');
 assert(carsJs.includes('knowledge-workspace'), 'sales materials page should use a desktop workspace layout');
 assert(carsJs.includes('knowledge-list-card'), 'sales materials list should be a first-class workspace panel');
-assert(css.includes('grid-template-columns: minmax(320px, 420px) minmax(0, 1fr)'), 'sales materials layout should keep the list visible at 100 percent zoom');
+assert(css.includes('grid-template-columns: minmax(300px, 360px) minmax(320px, 420px) minmax(0, 1fr)'), 'sales materials layout should keep upload, manual entry, and list visible at 100 percent zoom');
+assert(css.includes('.knowledge-side') && css.includes('display: contents'), 'sales material input cards should sit side by side on desktop');
 assert(css.includes('max-height: calc(100dvh - var(--topbar-h) - 300px)'), 'sales materials list should scroll within the visible workspace');
 assert(chat.includes('new WebSocket'), 'chat should use websocket streaming for AI replies');
 assert(chat.includes('createStreamingAgentMessage'), 'chat should create an assistant bubble before streamed output arrives');

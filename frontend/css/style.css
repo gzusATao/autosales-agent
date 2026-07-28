@@ -491,15 +491,13 @@ textarea.form-control {
 
 .knowledge-workspace {
   display: grid;
-  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  grid-template-columns: minmax(300px, 360px) minmax(320px, 420px) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
 
 .knowledge-side {
-  display: grid;
-  gap: 16px;
-  min-width: 0;
+  display: contents;
 }
 
 .knowledge-tool-card {
@@ -509,6 +507,7 @@ textarea.form-control {
 .knowledge-list-card {
   min-width: 0;
   min-height: min(680px, calc(100dvh - var(--topbar-h) - 210px));
+  grid-column: 3;
 }
 
 .knowledge-list-card #knowledge-list {
@@ -1745,8 +1744,14 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .knowledge-side {
+    display: grid;
+    gap: 16px;
+  }
+
   .knowledge-list-card {
     min-height: 0;
+    grid-column: auto;
   }
 
   .knowledge-list-card #knowledge-list {
