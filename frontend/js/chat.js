@@ -7,6 +7,9 @@ let sessionId = localStorage.getItem('chat_session_id') || '';
 let customerId = localStorage.getItem('chat_customer_id') || '';
 let isSending = false;
 let thinkingTimer = null;
+let lastUserMessage = '';
+let feedbackTurnId = 0;
+const feedbackTurns = new Map();
 
 const INTENT_TITLES = {
   car_recommendation: '车型推荐结果',
@@ -64,6 +67,7 @@ function initPage() {
   thinkingEl = document.getElementById('agent-thinking');
   thinkingText = document.getElementById('thinking-text');
 
+  ensureFeedbackModal();
   hideGlobalThinking();
 
   sendBtn?.addEventListener('click', sendMessage);
@@ -88,10 +92,11 @@ async function sendMessage() {
 
   inputEl.value = '';
   setSending(true);
+  lastUserMessage = text;
   addUserMessage(text);
   startGraphThinking();
 
-  const streamMessage = createStreamingAgentMessage();
+  const streamMessage = createStreamingAgentMessage(text);
 
   try {
     const response = await streamChatMessage(text, streamMessage);
@@ -254,7 +259,7 @@ function addUserMessage(text) {
   scrollToBottom();
 }
 
-function createStreamingAgentMessage() {
+function createStreamingAgentMessage(question = '') {
   const div = document.createElement('div');
   div.className = 'message assistant is-streaming';
   div.innerHTML = `
@@ -278,6 +283,7 @@ function createStreamingAgentMessage() {
     root: div,
     subtitle: div.querySelector('.msg-subtitle'),
     body: div.querySelector('.stream-body'),
+    question,
     text: '',
     hasFirstChunk: false,
   };
@@ -312,7 +318,121 @@ function finishStreamingAgentMessage(streamMessage, response) {
       </div>
     `);
   }
+  renderFeedbackControls(streamMessage, response, reply);
   scrollToBottom();
+}
+
+function renderFeedbackControls(streamMessage, response, reply) {
+  const oldFeedback = streamMessage.root.querySelector('.feedback-actions');
+  if (oldFeedback) oldFeedback.remove();
+
+  const turnId = `turn-${Date.now()}-${++feedbackTurnId}`;
+  const turn = {
+    session_id: response.session_id || sessionId,
+    customer_id: response.customer_id || customerId,
+    question: streamMessage.question || lastUserMessage,
+    answer: reply,
+    intent: response.current_intent || '',
+    tool_trace: response.tool_trace || [],
+  };
+  feedbackTurns.set(turnId, turn);
+
+  streamMessage.root.querySelector('.message-content').insertAdjacentHTML('beforeend', `
+    <div class="feedback-actions" data-turn-id="${turnId}">
+      <span>本轮回答有帮助吗？</span>
+      <button type="button" class="feedback-btn good" data-feedback-rating="good">满意</button>
+      <button type="button" class="feedback-btn bad" data-feedback-rating="bad">不满意</button>
+      <span class="feedback-status" aria-live="polite"></span>
+    </div>
+  `);
+
+  const actions = streamMessage.root.querySelector('.feedback-actions');
+  actions.querySelector('[data-feedback-rating="good"]').addEventListener('click', () => {
+    submitFeedback(turnId, 'good', '');
+  });
+  actions.querySelector('[data-feedback-rating="bad"]').addEventListener('click', () => {
+    openFeedbackModal(turnId);
+  });
+}
+
+function ensureFeedbackModal() {
+  if (document.getElementById('feedback-modal')) return;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="feedback-modal" id="feedback-modal" aria-hidden="true">
+      <div class="feedback-modal-card" role="dialog" aria-modal="true" aria-labelledby="feedback-modal-title">
+        <div class="feedback-modal-head">
+          <strong id="feedback-modal-title">不满意原因</strong>
+          <button type="button" class="feedback-modal-close" aria-label="关闭">×</button>
+        </div>
+        <div class="feedback-reason-grid">
+          ${['答非所问', '信息不准', '资料不足', '追问太多', '工具调用错误', '其他'].map(reason => `
+            <label><input type="radio" name="feedback-reason" value="${reason}"> ${reason}</label>
+          `).join('')}
+        </div>
+        <textarea class="form-control feedback-note" id="feedback-note" placeholder="可以补充一句具体问题，方便后续优化"></textarea>
+        <div class="feedback-modal-actions">
+          <button type="button" class="btn btn-outline feedback-cancel">取消</button>
+          <button type="button" class="btn btn-primary feedback-submit">提交反馈</button>
+        </div>
+      </div>
+    </div>
+  `);
+
+  document.querySelector('.feedback-modal-close').addEventListener('click', closeFeedbackModal);
+  document.querySelector('.feedback-cancel').addEventListener('click', closeFeedbackModal);
+  document.querySelector('.feedback-submit').addEventListener('click', submitBadFeedbackFromModal);
+}
+
+function openFeedbackModal(turnId) {
+  const modal = document.getElementById('feedback-modal');
+  modal.dataset.turnId = turnId;
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+  modal.querySelectorAll('input[name="feedback-reason"]').forEach(input => {
+    input.checked = input.value === '答非所问';
+  });
+  document.getElementById('feedback-note').value = '';
+}
+
+function closeFeedbackModal() {
+  const modal = document.getElementById('feedback-modal');
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden', 'true');
+  modal.dataset.turnId = '';
+}
+
+function submitBadFeedbackFromModal() {
+  const modal = document.getElementById('feedback-modal');
+  const selected = modal.querySelector('input[name="feedback-reason"]:checked');
+  const note = document.getElementById('feedback-note').value.trim();
+  const reason = [selected?.value || '其他', note].filter(Boolean).join('：');
+  submitFeedback(modal.dataset.turnId, 'bad', reason);
+  closeFeedbackModal();
+}
+
+async function submitFeedback(turnId, rating, reason) {
+  const turn = feedbackTurns.get(turnId);
+  if (!turn) return;
+  const actions = document.querySelector(`.feedback-actions[data-turn-id="${turnId}"]`);
+  const status = actions?.querySelector('.feedback-status');
+  const buttons = actions?.querySelectorAll('button') || [];
+  buttons.forEach(button => { button.disabled = true; });
+  if (status) status.textContent = '提交中...';
+
+  try {
+    await api.submitFeedback({
+      ...turn,
+      rating,
+      reason,
+      rag_chunks: [],
+    });
+    if (status) status.textContent = rating === 'good' ? '已记录满意反馈' : '已记录问题原因';
+    feedbackTurns.delete(turnId);
+  } catch (error) {
+    console.error('Failed to submit feedback', error);
+    buttons.forEach(button => { button.disabled = false; });
+    if (status) status.textContent = '提交失败，请稍后重试';
+  }
 }
 
 function buildSummaryItems(response) {

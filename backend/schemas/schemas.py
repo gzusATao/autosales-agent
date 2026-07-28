@@ -34,6 +34,33 @@ class ChatResponse(BaseModel):
     missing_slots: list[str] = []
 
 
+class FeedbackCreate(BaseModel):
+    session_id: str = ""
+    customer_id: str = ""
+    question: str
+    answer: str
+    intent: str = ""
+    rating: str = Field(..., pattern="^(good|bad)$")
+    reason: str = ""
+    tool_trace: list[ToolTraceItem] = []
+
+
+class FeedbackCreateResponse(BaseModel):
+    id: int
+    status: str = "saved"
+
+
+class FeedbackStatsResponse(BaseModel):
+    total: int
+    good: int
+    bad: int
+    reason_counts: dict = {}
+    intent_counts: dict = {}
+    tool_counts: dict = {}
+    recent_bad: list[dict] = []
+    suggestions: dict = {}
+
+
 # ─── 客户 ─────────────────────────────────────────
 
 class CustomerProfileResponse(BaseModel):

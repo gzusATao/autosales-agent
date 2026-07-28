@@ -55,6 +55,8 @@ assert(apiJs.includes('/health'), 'frontend should read health status for provid
 assert(apiJs.includes('uploadKnowledge'), 'frontend API should support adding knowledge documents');
 assert(apiJs.includes('uploadKnowledgeFile'), 'frontend API should support uploading knowledge files');
 assert(apiJs.includes("'/knowledge'"), 'frontend API should support listing knowledge documents');
+assert(apiJs.includes('submitFeedback'), 'frontend API should submit per-turn Agent feedback');
+assert(apiJs.includes("'/feedback'"), 'frontend API should call the feedback endpoint');
 assert(carsJs.includes('车型档案') && carsJs.includes('销售资料') && carsJs.includes('资料检索'), 'cars page should expose car profile and sales material tabs');
 assert(carsJs.includes('api.uploadKnowledge'), 'cars page should upload knowledge documents');
 assert(carsJs.includes('api.uploadKnowledgeFile'), 'cars page should upload PDF/TXT/Word/MD knowledge files');
@@ -67,9 +69,15 @@ assert(css.includes('.knowledge-side') && css.includes('display: contents'), 'sa
 assert(css.includes('max-height: calc(100dvh - var(--topbar-h) - 300px)'), 'sales materials list should scroll within the visible workspace');
 assert(chat.includes('new WebSocket'), 'chat should use websocket streaming for AI replies');
 assert(chat.includes('createStreamingAgentMessage'), 'chat should create an assistant bubble before streamed output arrives');
+assert(chat.includes('renderFeedbackControls'), 'chat should render satisfaction controls after every AI answer');
+assert(chat.includes('openFeedbackModal'), 'chat should ask for a reason when the user is unsatisfied');
+assert(chat.includes('lastUserMessage'), 'feedback payload should keep the question that triggered the answer');
+assert(chat.includes('rag_chunks') || chat.includes('tool_trace'), 'feedback payload should keep tool/RAG trace context');
 assert(chat.includes('output && tool.output.error'), 'agent panel should mark fallback tool traces from backend output errors');
 assert(chat.includes("failed ? '兜底' : '成功'"), 'agent panel should not show failed tool traces as successful');
 assert(css.includes('.stream-thinking'), 'assistant bubble should show a thinking animation before the first streamed chunk');
+assert(css.includes('.feedback-actions'), 'feedback controls should have compact action styling');
+assert(css.includes('.feedback-modal'), 'unsatisfied feedback reason modal should be styled');
 assert(css.includes('.tool-timeline-item .tool-status.failed'), 'fallback tool traces should have a distinct status style');
 assert(css.includes('@keyframes thinking-dot'), 'thinking animation should have a stable pulse keyframe');
 assert(css.includes('@media (max-width: 760px)'), 'mobile layout should have a dedicated phone breakpoint');

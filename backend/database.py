@@ -56,6 +56,7 @@ def init_db():
         TestDriveAppointment,
         ConversationSession,
         ConversationMessage,
+        AgentFeedback,
         KnowledgeDocument,
         KnowledgeChunk,
     )

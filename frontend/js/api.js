@@ -39,6 +39,9 @@ const api = {
             message,
         });
     },
+    submitFeedback(data) {
+        return this.request('POST', '/feedback', data);
+    },
 
     // 客户
     getCustomerProfile(id) {

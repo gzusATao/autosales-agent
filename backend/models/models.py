@@ -127,6 +127,24 @@ class ConversationMessage(Base):
     session = relationship("ConversationSession", back_populates="messages")
 
 
+class AgentFeedback(Base):
+    """User feedback for one completed Agent answer."""
+    __tablename__ = "agent_feedbacks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(64), default="", index=True)
+    customer_id = Column(String(32), default="", index=True)
+    question = Column(Text, nullable=False)
+    answer = Column(Text, nullable=False)
+    intent = Column(String(64), default="", index=True)
+    rating = Column(String(16), nullable=False, index=True)
+    reason = Column(String(64), default="", index=True)
+    tool_names = Column(JSON, default=list)
+    tool_trace = Column(JSON, default=list)
+    rag_chunks = Column(JSON, default=list)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+
+
 class KnowledgeDocument(Base):
     """知识库文档"""
     __tablename__ = "knowledge_documents"
