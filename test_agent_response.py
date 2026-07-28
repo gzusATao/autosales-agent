@@ -456,6 +456,23 @@ def test_inventory_tool_exception_uses_inventory_fallback():
     assert result["tool_trace"][-1]["output"]["error"] == "fallback"
 
 
+def test_market_hot_cars_are_seeded_with_aliases():
+    from backend.agent.nodes import _extract_known_models
+    from backend.seed_data import SEED_CARS
+
+    models = {car["model"] for car in SEED_CARS}
+
+    assert 20 <= len(models) <= 30
+    for model in ["理想L6", "问界M7", "小米SU7", "海鸥", "元PLUS", "腾势D9 DM-i"]:
+        assert model in models
+
+    found = _extract_known_models("想看看理想L6、问界M7和小米SU7")
+
+    assert "理想L6" in found
+    assert "问界M7" in found
+    assert "小米SU7" in found
+
+
 if __name__ == "__main__":
     test_response_node_preserves_follow_up_question()
     test_recommendation_response_uses_search_results_not_compare_script()
@@ -478,4 +495,5 @@ if __name__ == "__main__":
     test_tool_executor_handles_rag_exception_with_fallback()
     test_graph_node_exception_uses_node_specific_fallback()
     test_inventory_tool_exception_uses_inventory_fallback()
+    test_market_hot_cars_are_seeded_with_aliases()
     print("agent response checks passed")
