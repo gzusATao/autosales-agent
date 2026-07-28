@@ -139,19 +139,6 @@ a:hover { text-decoration: underline; }
 .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; opacity: .7; }
 .nav-item.active svg { opacity: 1; }
 
-.nav-subitem {
-  margin-left: 34px;
-  width: calc(100% - 34px);
-  padding: 9px 12px;
-  font-size: 13px;
-  background: rgba(15, 23, 42, .16);
-}
-
-.nav-subitem svg {
-  width: 16px;
-  height: 16px;
-}
-
 /* Main area */
 .main-wrapper {
   margin-left: var(--sidebar-w);
@@ -1988,14 +1975,6 @@ body {
     margin: 0;
     font-size: 9.5px;
     border-radius: 8px;
-  }
-
-  .nav-subitem {
-    width: auto;
-    margin-left: 0;
-    padding: 6px 2px;
-    font-size: 9.5px;
-    background: transparent;
   }
 
   .nav-item span {

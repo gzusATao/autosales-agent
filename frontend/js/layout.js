@@ -47,6 +47,7 @@ function renderSidebar(activePage) {
     { id: 'customers',    label: '客户画像',            icon: Icons.user,       href: '/customers.html' },
     { id: 'appointments', label: '试驾预约',            icon: Icons.calendar,   href: '/appointments.html' },
     { id: 'leads',        label: '销售线索',            icon: Icons.target,      href: '/leads.html' },
+    { id: 'metrics',      label: '后台监控',            icon: Icons.activity,    href: '/metrics.html' },
   ];
 
   return `
@@ -61,12 +62,6 @@ function renderSidebar(activePage) {
             ${item.icon}
             <span>${item.label}</span>
           </a>
-          ${item.id === 'leads' ? `
-            <a href="/metrics.html" class="nav-item nav-subitem ${activePage === 'metrics' ? 'active' : ''}">
-              ${Icons.activity}
-              <span>后台监控</span>
-            </a>
-          ` : ''}
         `).join('')}
       </nav>
     </aside>

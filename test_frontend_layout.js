@@ -61,9 +61,11 @@ assert(apiJs.includes('submitFeedback'), 'frontend API should submit per-turn Ag
 assert(apiJs.includes("'/feedback'"), 'frontend API should call the feedback endpoint');
 assert(apiJs.includes('getAgentMetrics'), 'frontend API should load Agent operations metrics');
 assert(apiJs.includes("'/metrics/agent'"), 'frontend API should call the metrics endpoint');
-assert(layout.includes('nav-subitem'), 'sidebar should show metrics as a child entry under sales leads');
+assert(layout.includes("id: 'metrics'"), 'sidebar should include metrics as a top-level tab');
 assert(layout.includes('后台监控'), 'metrics navigation should use the backend monitoring label');
-assert(layout.includes("href=\"/metrics.html\""), 'metrics child nav should link to the monitoring page');
+assert(layout.includes("href: '/metrics.html'"), 'metrics nav should link to the monitoring page');
+assert(!layout.includes('nav-subitem'), 'metrics nav should align with the other top-level tabs');
+assert(html.includes('/js/layout.js?v='), 'chat page should cache-bust the shared layout script');
 assert(carsJs.includes('车型档案') && carsJs.includes('销售资料') && carsJs.includes('资料检索'), 'cars page should expose car profile and sales material tabs');
 assert(carsJs.includes('api.uploadKnowledge'), 'cars page should upload knowledge documents');
 assert(carsJs.includes('api.uploadKnowledgeFile'), 'cars page should upload PDF/TXT/Word/MD knowledge files');
