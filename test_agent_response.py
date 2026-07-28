@@ -146,8 +146,33 @@ def test_two_named_models_with_choice_phrase_routes_to_compare():
     })
 
     assert result["current_intent"] == "car_compare"
-    assert result["next_action"] == "rag_search"
+    assert result["next_action"] == "compare_car"
     assert result["purchase_intent"]["intent_models"] == ["宋PLUS DM-i", "锋兰达双擎"]
+
+
+def test_explicit_compare_routes_to_compare_tool_not_rag():
+    from backend.agent.nodes import intent_node
+
+    result = intent_node({
+        "user_message": "对比宋PLUS和锋兰达",
+        "purchase_intent": {"budget": "20万以内", "car_type": "SUV"},
+    })
+
+    assert result["current_intent"] == "car_compare"
+    assert result["next_action"] == "compare_car"
+    assert result["missing_slots"] == []
+
+
+def test_follow_up_budget_update_overrides_previous_budget():
+    from backend.agent.nodes import intent_node
+
+    result = intent_node({
+        "user_message": "30w呢",
+        "purchase_intent": {"budget": "20万以内", "car_type": "SUV"},
+    })
+
+    assert result["purchase_intent"]["budget"] == "30万以内"
+    assert result["next_action"] == "rag_search"
 
 
 def test_follow_up_question_mentions_known_budget_and_car_type():
@@ -480,6 +505,8 @@ if __name__ == "__main__":
     test_inventory_songplus_alias_queries_real_model()
     test_impossible_tesla_budget_reply_explains_mismatch()
     test_two_named_models_with_choice_phrase_routes_to_compare()
+    test_explicit_compare_routes_to_compare_tool_not_rag()
+    test_follow_up_budget_update_overrides_previous_budget()
     test_follow_up_question_mentions_known_budget_and_car_type()
     test_general_question_does_not_force_purchase_slots()
     test_sales_material_question_routes_to_rag_not_slot_fill()

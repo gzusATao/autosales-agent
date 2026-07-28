@@ -68,10 +68,17 @@ def intent_node(state: SalesAgentState) -> dict:
     msg_lower = msg.lower()
 
     inferred_models = _extract_known_models(msg_lower)
+    inferred_budget = _extract_budget_text(msg_lower)
     compare_like = _is_compare_query(msg_lower)
     if _is_acknowledgement(msg_lower) and state.get("purchase_intent"):
         intent = "car_recommendation"
         missing = []
+    if inferred_budget:
+        slots["budget"] = inferred_budget
+        if "budget" in missing:
+            missing.remove("budget")
+        if state.get("purchase_intent"):
+            intent = "car_recommendation"
     if inferred_models and not slots.get("intent_models"):
         slots["intent_models"] = inferred_models
     if compare_like and len(inferred_models) >= 2:
@@ -89,7 +96,7 @@ def intent_node(state: SalesAgentState) -> dict:
         if key == "intent_models" and val:
             existing = purchase_intent.get(key, [])
             purchase_intent[key] = list(dict.fromkeys([*existing, *val]))
-        elif val and not purchase_intent.get(key):
+        elif val:
             purchase_intent[key] = val
 
     # 根据 intent 和字段完整性决定下一步
@@ -99,7 +106,9 @@ def intent_node(state: SalesAgentState) -> dict:
     )
 
     action_intents = {"inventory_query", "test_drive", "loan_calculation", "lead_save"}
-    if intent not in action_intents and _should_force_rag_grounding(msg_lower, purchase_intent):
+    if intent == "car_compare":
+        next_action = "compare_car"
+    elif intent not in action_intents and _should_force_rag_grounding(msg_lower, purchase_intent):
         next_action = "rag_search"
         missing = []
     elif intent == "car_recommendation":
@@ -117,8 +126,6 @@ def intent_node(state: SalesAgentState) -> dict:
         else:
             next_action = "general_response"
             missing = []
-    elif intent == "car_compare":
-        next_action = "compare_car"
     elif intent == "loan_calculation":
         next_action = "loan_calculator"
     elif intent == "inventory_query":
@@ -295,8 +302,20 @@ def _should_force_rag_grounding(message: str, purchase_intent: dict | None = Non
 
 def _has_budget_mention(message: str) -> bool:
     """Return whether the message includes a simple budget expression."""
+    return bool(_extract_budget_text(message))
+
+
+def _extract_budget_text(message: str) -> str:
+    """Extract common budget expressions such as 20万, 30w or 30W."""
     import re
-    return bool(re.search(r"(\d+)\s*万", message))
+
+    match = re.search(r"(\d+(?:\.\d+)?)\s*(?:万|w)", message.lower())
+    if not match:
+        return ""
+
+    raw_value = match.group(1)
+    value = raw_value.rstrip("0").rstrip(".") if "." in raw_value else raw_value
+    return f"{value}万以内"
 
 
 def _complete_compare_models(models: list[str], purchase_intent: dict) -> list[str]:
@@ -456,9 +475,9 @@ def tool_executor(state: SalesAgentState) -> dict:
         # 尝试提取预算
         budget_max = 0
         import re
-        budget_match = re.search(r"(\d+)\s*万", msg)
-        if budget_match:
-            budget_max = int(budget_match.group(1)) * 10000
+        budget_text = _extract_budget_text(msg)
+        if budget_text:
+            budget_max = int(float(budget_text.replace("万以内", ""))) * 10000
         elif purchase_intent.get("budget"):
             b = purchase_intent["budget"]
             bm = re.search(r"(\d+)", b)
