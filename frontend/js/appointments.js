@@ -23,7 +23,7 @@ async function loadAppointments() {
       </div>
 
       <!-- 表格 -->
-      <div class="card">
+      <div class="card responsive-table-card">
         <div class="table-wrap">
           <table>
             <thead>
@@ -63,6 +63,36 @@ async function loadAppointments() {
               `}
             </tbody>
           </table>
+        </div>
+        <div class="mobile-record-list">
+          ${apps.length ? apps.map(a => `
+            <article class="mobile-record-card">
+              <div class="mobile-record-head">
+                <div>
+                  <div class="mobile-record-title">${a.customer_name || '未知客户'}</div>
+                  <div class="mobile-record-subtitle">${a.phone || '未留电话'}</div>
+                </div>
+                <span class="tag ${a.status === '预约成功' ? 'tag-success' : a.status === '已完成' ? 'tag-done' : a.status === '已取消' ? 'tag-cancel' : 'tag-pending'}">${a.status}</span>
+              </div>
+              <div class="mobile-record-meta">
+                <div><span>车型</span><strong>${a.brand || ''} ${a.model || ''}</strong></div>
+                <div><span>门店</span><strong>${a.store_name || '-'}</strong></div>
+              </div>
+              <div class="mobile-record-line">
+                <span>预约时间</span>
+                <strong>${a.appointment_time || '-'}</strong>
+              </div>
+              <div class="btn-group mobile-record-action">
+                <button class="btn btn-sm btn-ghost" ${a.status !== '预约成功' ? 'disabled' : ''}>确认</button>
+                <button class="btn btn-sm btn-ghost">改期</button>
+              </div>
+            </article>
+          `).join('') : `
+            <div class="mobile-empty-card">
+              暂无试驾预约记录
+              <div class="hint mt-1">通过销售对话页预约试驾后显示在此</div>
+            </div>
+          `}
         </div>
       </div>
     `;

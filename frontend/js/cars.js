@@ -105,7 +105,7 @@ function renderCarsTab() {
       </div>
     </div>
 
-    <div class="card">
+    <div class="card responsive-table-card">
       <div class="table-wrap">
         <table>
           <thead>
@@ -123,6 +123,7 @@ function renderCarsTab() {
           <tbody id="cars-tbody"></tbody>
         </table>
       </div>
+      <div class="mobile-record-list" id="cars-mobile-list"></div>
     </div>
   `;
 }
@@ -271,6 +272,7 @@ function renderTable() {
   if (resultCount) resultCount.textContent = `${filtered.length} 款车型`;
 
   const tbody = document.getElementById('cars-tbody');
+  const mobileList = document.getElementById('cars-mobile-list');
   if (!tbody) return;
 
   tbody.innerHTML = filtered.map(c => `
@@ -287,6 +289,27 @@ function renderTable() {
       </td>
     </tr>
   `).join('') || '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-muted);">无匹配车型</td></tr>';
+
+  if (mobileList) {
+    mobileList.innerHTML = filtered.map(c => `
+      <article class="mobile-record-card">
+        <div class="mobile-record-head">
+          <div>
+            <div class="mobile-record-title">${escapeHtml(c.brand)} ${escapeHtml(c.model)}</div>
+            <div class="mobile-record-subtitle">¥${(c.price / 10000).toFixed(1)}万 · ${c.seat_count}座</div>
+          </div>
+          <span class="tag tag-blue">${escapeHtml(c.car_type)}</span>
+        </div>
+        <div class="mobile-record-meta">
+          <div><span>能源</span><strong>${escapeHtml(c.energy_type)}</strong></div>
+          <div><span>油耗/续航</span><strong>${escapeHtml(c.fuel_consumption || c.range_km || '-')}</strong></div>
+        </div>
+        <div class="mobile-record-tags">
+          ${(c.highlights || []).slice(0, 4).map(h => `<span class="tag tag-cold">${escapeHtml(h)}</span>`).join('')}
+        </div>
+      </article>
+    `).join('') || '<div class="mobile-empty-card">无匹配车型</div>';
+  }
 }
 
 function renderKnowledgeList() {

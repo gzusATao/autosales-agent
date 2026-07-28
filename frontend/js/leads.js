@@ -25,7 +25,7 @@ async function loadLeads() {
       </div>
 
       <!-- 表格 -->
-      <div class="card">
+      <div class="card responsive-table-card">
         <div class="table-wrap">
           <table>
             <thead>
@@ -62,6 +62,34 @@ async function loadLeads() {
               `}
             </tbody>
           </table>
+        </div>
+        <div class="mobile-record-list">
+          ${leads.length ? leads.map(l => `
+            <article class="mobile-record-card">
+              <div class="mobile-record-head">
+                <div>
+                  <div class="mobile-record-title">${l.name || '未知客户'}</div>
+                  <div class="mobile-record-subtitle">${l.phone || '未留电话'}</div>
+                </div>
+                <span class="tag ${l.lead_level === '高意向' ? 'tag-hot' : l.lead_level === '中意向' ? 'tag-warm' : 'tag-cold'}">${l.lead_level || '低意向'}</span>
+              </div>
+              <div class="mobile-record-meta">
+                <div><span>预算</span><strong>${l.budget || '-'}</strong></div>
+                <div><span>购车周期</span><strong>${l.purchase_time || '-'}</strong></div>
+              </div>
+              <div class="mobile-record-line">
+                <span>意向车型</span>
+                <strong>${(l.intent_models || []).join('、') || '-'}</strong>
+              </div>
+              <p class="mobile-record-summary">${l.follow_up_summary || '暂无跟进摘要'}</p>
+              <button class="btn btn-sm btn-outline mobile-record-action" onclick="showLeadDetail(${JSON.stringify(l).replace(/"/g, '&quot;')})">查看</button>
+            </article>
+          `).join('') : `
+            <div class="mobile-empty-card">
+              暂无线索数据
+              <div class="hint mt-1">通过销售对话页与客户沟通后自动生成线索</div>
+            </div>
+          `}
         </div>
       </div>
 

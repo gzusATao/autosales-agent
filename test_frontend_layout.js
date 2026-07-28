@@ -10,6 +10,9 @@ const apiJs = fs.readFileSync('frontend/js/api.js', 'utf8');
 const dashboardHtml = fs.readFileSync('frontend/dashboard.html', 'utf8');
 const favicon = fs.readFileSync('frontend/favicon.svg', 'utf8');
 const carsJs = fs.readFileSync('frontend/js/cars.js', 'utf8');
+const customersJs = fs.readFileSync('frontend/js/customers.js', 'utf8');
+const leadsJs = fs.readFileSync('frontend/js/leads.js', 'utf8');
+const appointmentsJs = fs.readFileSync('frontend/js/appointments.js', 'utf8');
 
 function assert(condition, message) {
   if (!condition) {
@@ -72,6 +75,14 @@ assert(css.includes('height: calc(64px + env(safe-area-inset-bottom))'), 'mobile
 assert(css.includes('height: calc(100dvh - var(--topbar-h) - 74px - env(safe-area-inset-bottom))'), 'mobile chat should use dynamic viewport height and safe area');
 assert(css.includes('.form-row .form-control') && css.includes('width: 100% !important'), 'mobile filters should stack without narrow inline widths');
 assert(css.includes('min-width: 760px'), 'mobile tables should keep a stable horizontal scroll width');
+assert(css.includes('.responsive-table-card .table-wrap') && css.includes('display: none'), 'mobile data pages should hide desktop tables');
+assert(css.includes('.mobile-record-list') && css.includes('.mobile-record-card'), 'mobile data pages should render readable record cards');
+assert(css.includes('grid-template-columns: repeat(2, minmax(0, 1fr))'), 'mobile statistic cards should use a compact two-column layout');
+assert(css.includes('padding: 10px 10px calc(104px + env(safe-area-inset-bottom))'), 'mobile content should leave room for bottom navigation');
+assert(carsJs.includes('cars-mobile-list'), 'cars page should render a mobile card list');
+assert(customersJs.includes('mobile-record-list'), 'customers page should render a mobile card list');
+assert(leadsJs.includes('mobile-record-list'), 'leads page should render a mobile card list');
+assert(appointmentsJs.includes('mobile-record-list'), 'appointments page should render a mobile card list');
 assert(html.includes('href="/favicon.svg"'), 'chat page should include the branded favicon');
 assert(dashboardHtml.includes('href="/favicon.svg"'), 'dashboard page should include the branded favicon');
 assert(favicon.includes('aria-label="汽车销售顾问"'), 'favicon should be branded for the product');
