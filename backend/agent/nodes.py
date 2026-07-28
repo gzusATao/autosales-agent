@@ -69,6 +69,7 @@ def intent_node(state: SalesAgentState) -> dict:
 
     inferred_models = _extract_known_models(msg_lower)
     inferred_budget = _extract_budget_text(msg_lower)
+    inferred_purchase_time = _extract_purchase_time_text(msg_lower)
     finance_like = _is_finance_query(msg_lower)
     compare_like = _is_compare_query(msg_lower)
     prior_purchase_intent = state.get("purchase_intent", {})
@@ -107,6 +108,12 @@ def intent_node(state: SalesAgentState) -> dict:
             intent = "car_recommendation"
     if inferred_models and not slots.get("intent_models"):
         slots["intent_models"] = inferred_models
+    if inferred_purchase_time:
+        slots["purchase_time"] = inferred_purchase_time
+        if "purchase_time" in missing:
+            missing.remove("purchase_time")
+        if prior_purchase_intent:
+            intent = "car_recommendation"
     if compare_like and len(inferred_models) >= 2:
         intent = "car_compare"
         missing = []
@@ -231,9 +238,12 @@ def slot_fill_node(state: SalesAgentState) -> dict:
         if not intent.get(key) and profile.get(key):
             intent[key] = profile[key]
 
-    # 重新计算缺失字段
+    # 重新计算缺失字段。购车周期是体验友好的轻量追问项：
+    # 简单咨询不问；识别出购车推荐需求后，和核心槽位一起一次性追问。
     required = ["budget", "car_type", "energy_type"]
     missing = [k for k in required if not intent.get(k)]
+    if current_intent == "car_recommendation" and not intent.get("purchase_time"):
+        missing.append("purchase_time")
 
     return {
         "purchase_intent": intent,
@@ -292,6 +302,24 @@ def _first_known_model(message: str, purchase_intent: dict | None = None) -> str
         return intent_models[0]
     models = _extract_known_models(message)
     return models[0] if models else ""
+
+
+def _extract_purchase_time_text(message: str) -> str:
+    """Extract common purchase-cycle expressions with deterministic rules."""
+    normalized = message.lower()
+    time_aliases = [
+        ("马上/尽快", ["马上", "立刻", "尽快", "急着买", "马上买", "近期就买"]),
+        ("本周/周末", ["本周", "这周", "周末", "星期六", "星期天", "礼拜六", "礼拜天"]),
+        ("这个月内", ["这个月", "本月", "月内", "一个月内", "1个月内", "月底", "月底前"]),
+        ("三个月内", ["三个月内", "3个月内", "两三个月", "2-3个月", "2到3个月"]),
+        ("半年内", ["半年内", "6个月内", "六个月内"]),
+        ("年底前", ["年底", "年前", "春节前", "过年前"]),
+        ("先看看", ["先看看", "不着急", "以后再说", "明年", "暂时不买"]),
+    ]
+    for label, aliases in time_aliases:
+        if any(alias in normalized for alias in aliases):
+            return label
+    return ""
 
 
 def _is_sales_material_query(message: str) -> bool:
@@ -431,6 +459,8 @@ def route_node(state: SalesAgentState) -> dict:
     intent = state.get("current_intent", "")
     if action == "rag_search" and _is_sales_material_query(state.get("user_message", "").lower()):
         return {"next_action": "rag_search"}
+    if action == "rag_search" and intent == "car_recommendation" and missing:
+        return {"next_action": "ask_question"}
     if action == "rag_search" and intent in ("general_question",) and len(missing) >= 3:
         return {"next_action": "ask_question"}
 

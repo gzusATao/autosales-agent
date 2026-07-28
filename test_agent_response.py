@@ -263,6 +263,47 @@ def test_follow_up_question_mentions_known_budget_and_car_type():
     assert "能源" in reply or "燃油" in reply
 
 
+def test_recommendation_asks_purchase_time_after_core_slots():
+    from backend.agent.nodes import route_node, slot_fill_node, ask_question_node
+
+    state = {
+        "user_message": "我想买20万以内SUV，要混动",
+        "current_intent": "car_recommendation",
+        "next_action": "rag_search",
+        "customer_profile": {},
+        "purchase_intent": {
+            "budget": "20万以内",
+            "car_type": "SUV",
+            "energy_type": "混动",
+        },
+    }
+
+    filled = slot_fill_node(state)
+    assert filled["missing_slots"] == ["purchase_time"]
+
+    routed = route_node(state | filled)
+    assert routed["next_action"] == "ask_question"
+
+    reply = ask_question_node(filled)["final_response"]
+    assert "什么时候购车" in reply
+
+
+def test_purchase_time_follow_up_updates_existing_intent():
+    from backend.agent.nodes import intent_node
+
+    result = intent_node({
+        "user_message": "这个月内",
+        "purchase_intent": {
+            "budget": "20万以内",
+            "car_type": "SUV",
+            "energy_type": "混动",
+        },
+    })
+
+    assert result["current_intent"] == "car_recommendation"
+    assert result["purchase_intent"]["purchase_time"] == "这个月内"
+
+
 def test_general_question_does_not_force_purchase_slots():
     from backend.agent.nodes import intent_node
 
@@ -666,6 +707,8 @@ if __name__ == "__main__":
     test_loan_tool_uses_down_payment_amount_not_as_car_price()
     test_loan_tool_uses_named_model_price_for_monthly_payment()
     test_follow_up_question_mentions_known_budget_and_car_type()
+    test_recommendation_asks_purchase_time_after_core_slots()
+    test_purchase_time_follow_up_updates_existing_intent()
     test_general_question_does_not_force_purchase_slots()
     test_sales_material_question_routes_to_rag_not_slot_fill()
     test_slot_fill_does_not_add_purchase_slots_for_general_response()
