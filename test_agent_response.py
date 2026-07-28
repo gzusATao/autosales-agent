@@ -175,6 +175,52 @@ def test_follow_up_budget_update_overrides_previous_budget():
     assert result["next_action"] == "rag_search"
 
 
+def test_down_payment_follow_up_keeps_loan_intent_not_budget_update():
+    from backend.agent.nodes import intent_node
+
+    result = intent_node({
+        "user_message": "首付10万呢",
+        "purchase_intent": {"budget": "20万以内", "car_type": "SUV"},
+    })
+
+    assert result["current_intent"] == "loan_calculation"
+    assert result["next_action"] == "loan_calculator"
+    assert result["purchase_intent"]["budget"] == "20万以内"
+
+
+def test_loan_tool_uses_down_payment_amount_not_as_car_price():
+    from backend.agent.nodes import response_node, tool_executor
+
+    result = tool_executor({
+        "user_message": "首付10万呢",
+        "current_intent": "loan_calculation",
+        "next_action": "loan_calculator",
+        "purchase_intent": {"budget": "20万以内", "car_type": "SUV"},
+        "tool_results": {},
+        "tool_trace": [],
+    })
+
+    loan = result["tool_results"]["loan"]
+    trace_input = result["tool_trace"][-1]["input"]
+
+    assert trace_input["car_price"] == 169800
+    assert abs(trace_input["down_payment_rate"] - (100000 / 169800)) < 0.000001
+    assert loan["down_payment"] == 100000
+    assert loan["loan_amount"] == 69800
+
+    reply = response_node({
+        "user_message": "首付10万呢",
+        "current_intent": "loan_calculation",
+        "purchase_intent": {"budget": "20万以内", "car_type": "SUV"},
+        "tool_results": result["tool_results"],
+        "tool_trace": result["tool_trace"],
+    })["final_response"]
+
+    assert "首付" in reply and "¥100,000" in reply
+    assert "贷款金额" in reply and "¥69,800" in reply
+    assert "首付 30%" not in reply
+
+
 def test_follow_up_question_mentions_known_budget_and_car_type():
     from backend.agent.nodes import ask_question_node
 
@@ -547,6 +593,8 @@ if __name__ == "__main__":
     test_two_named_models_with_choice_phrase_routes_to_compare()
     test_explicit_compare_routes_to_compare_tool_not_rag()
     test_follow_up_budget_update_overrides_previous_budget()
+    test_down_payment_follow_up_keeps_loan_intent_not_budget_update()
+    test_loan_tool_uses_down_payment_amount_not_as_car_price()
     test_follow_up_question_mentions_known_budget_and_car_type()
     test_general_question_does_not_force_purchase_slots()
     test_sales_material_question_routes_to_rag_not_slot_fill()

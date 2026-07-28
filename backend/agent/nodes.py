@@ -69,11 +69,16 @@ def intent_node(state: SalesAgentState) -> dict:
 
     inferred_models = _extract_known_models(msg_lower)
     inferred_budget = _extract_budget_text(msg_lower)
+    finance_like = _is_finance_query(msg_lower)
     compare_like = _is_compare_query(msg_lower)
     if _is_acknowledgement(msg_lower) and state.get("purchase_intent"):
         intent = "car_recommendation"
         missing = []
-    if inferred_budget:
+    if finance_like:
+        intent = "loan_calculation"
+        missing = []
+        slots["budget"] = ""
+    elif inferred_budget:
         slots["budget"] = inferred_budget
         if "budget" in missing:
             missing.remove("budget")
@@ -283,6 +288,12 @@ def _is_compare_query(message: str) -> bool:
     return any(keyword in message for keyword in keywords)
 
 
+def _is_finance_query(message: str) -> bool:
+    """Identify loan or down-payment follow-up wording."""
+    keywords = ["月供", "首付", "贷款", "分期", "还款", "利息"]
+    return any(keyword in message for keyword in keywords)
+
+
 def _is_acknowledgement(message: str) -> bool:
     """Short confirmation phrases should continue the existing buying context."""
     normalized = message.strip().lower()
@@ -316,6 +327,16 @@ def _extract_budget_text(message: str) -> str:
     raw_value = match.group(1)
     value = raw_value.rstrip("0").rstrip(".") if "." in raw_value else raw_value
     return f"{value}万以内"
+
+
+def _extract_down_payment_amount(message: str) -> int:
+    """Extract explicit down-payment amount in yuan from messages like 首付10万."""
+    import re
+
+    match = re.search(r"首付\s*(\d+(?:\.\d+)?)\s*(?:万|w)", message.lower())
+    if not match:
+        return 0
+    return int(float(match.group(1)) * 10000)
 
 
 def _complete_compare_models(models: list[str], purchase_intent: dict) -> list[str]:
@@ -576,11 +597,15 @@ def tool_executor(state: SalesAgentState) -> dict:
         # 从消息中提取车价
         import re
         price = 169800  # 默认宋PLUS
-        price_match = re.search(r"(\d+)\s*万", msg)
-        if price_match:
-            price = int(price_match.group(1)) * 10000
+        down_payment_amount = _extract_down_payment_amount(msg)
+        if not down_payment_amount:
+            price_match = re.search(r"(\d+)\s*万", msg)
+            if price_match:
+                price = int(price_match.group(1)) * 10000
 
         default_params["car_price"] = price
+        if down_payment_amount:
+            default_params["down_payment_rate"] = min(down_payment_amount, price) / price
         try:
             loan_result = loan_calculator_tool(**default_params)
         except Exception as exc:
@@ -720,6 +745,9 @@ def response_node(state: SalesAgentState) -> dict:
 
     if results.get("compare"):
         return {"final_response": _build_compare_reply(results["compare"])}
+
+    if results.get("loan"):
+        return {"final_response": _build_loan_reply(results["loan"])}
 
     if results.get("rag_docs"):
         return {"final_response": _build_rag_reply(results["rag_docs"], msg)}
@@ -862,6 +890,25 @@ def _build_compare_reply(cars: list[dict]) -> str:
             f"{car.get('recommendation', '')}"
         )
     lines.extend(["", "你更看重空间、用车成本，还是品牌稳定性？我可以按你的侧重点给结论。"])
+    return "\n".join(lines)
+
+
+def _build_loan_reply(loan: dict) -> str:
+    """Build a deterministic loan reply from calculator results."""
+    def money(value: float) -> str:
+        return f"¥{value:,.0f}"
+
+    monthly_payment = loan.get("monthly_payment", 0)
+    lines = [
+        "按当前方案试算，分期结果如下：",
+        "",
+        f"- **首付**：{money(loan.get('down_payment', 0))}",
+        f"- **贷款金额**：{money(loan.get('loan_amount', 0))}",
+        f"- **月供**：{money(monthly_payment)}（约36期）",
+        f"- **总利息**：{money(loan.get('total_interest', 0))}",
+        "",
+        "这个结果是按当前工具参数估算，实际月供还要以裸车价、金融利率、保险和门店政策为准。",
+    ]
     return "\n".join(lines)
 
 
