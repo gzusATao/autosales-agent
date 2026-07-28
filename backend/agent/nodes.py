@@ -71,6 +71,27 @@ def intent_node(state: SalesAgentState) -> dict:
     inferred_budget = _extract_budget_text(msg_lower)
     finance_like = _is_finance_query(msg_lower)
     compare_like = _is_compare_query(msg_lower)
+    prior_purchase_intent = state.get("purchase_intent", {})
+    if _is_ambiguous_model_question(msg_lower):
+        return {
+            "current_intent": "general_question",
+            "purchase_intent": prior_purchase_intent,
+            "missing_slots": [],
+            "next_action": "general_response",
+            "final_response": _build_ambiguous_model_reply(),
+        }
+    if (
+        _is_inventory_query(msg_lower)
+        and not inferred_models
+        and not prior_purchase_intent.get("intent_models")
+    ):
+        return {
+            "current_intent": "general_question",
+            "purchase_intent": prior_purchase_intent,
+            "missing_slots": [],
+            "next_action": "general_response",
+            "final_response": "你想查哪款车的现车？请直接告诉我具体车型，比如“宋PLUS DM-i有现车吗”或“瑞虎8广州有现车吗”，我再按门店库存帮你确认。",
+        }
     if _is_acknowledgement(msg_lower) and state.get("purchase_intent"):
         intent = "car_recommendation"
         missing = []
@@ -292,6 +313,26 @@ def _is_finance_query(message: str) -> bool:
     """Identify loan or down-payment follow-up wording."""
     keywords = ["月供", "首付", "贷款", "分期", "还款", "利息"]
     return any(keyword in message for keyword in keywords)
+
+
+def _is_inventory_query(message: str) -> bool:
+    """Identify inventory questions that need a concrete model."""
+    keywords = ["现车", "库存", "有车", "提车", "可提"]
+    return any(keyword in message for keyword in keywords)
+
+
+def _is_ambiguous_model_question(message: str) -> bool:
+    """Short model-reference questions should clarify context instead of guessing."""
+    normalized = message.strip().lower().replace("？", "").replace("?", "")
+    return normalized in {"什么车", "啥车", "哪款车", "哪个车", "什么车型", "哪款车型"}
+
+
+def _build_ambiguous_model_reply() -> str:
+    return (
+        "你是想问刚才提到的是哪款车，还是想让我按你的预算重新推荐车型？"
+        "如果是查库存或月供，请直接说具体车型，比如“瑞虎8有现车吗”或“宋PLUS月供多少”；"
+        "如果是想推荐，我可以继续按预算、用途和能源偏好帮你筛。"
+    )
 
 
 def _is_acknowledgement(message: str) -> bool:

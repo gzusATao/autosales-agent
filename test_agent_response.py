@@ -339,6 +339,44 @@ def test_inventory_query_does_not_force_purchase_slots_or_appointment():
     assert "预约" not in reply
 
 
+def test_inventory_query_without_model_asks_for_target_model():
+    from backend.agent.nodes import intent_node, response_node
+
+    result = intent_node({
+        "user_message": "有现车吗",
+        "purchase_intent": {"budget": "20万以内", "car_type": "SUV"},
+    })
+
+    assert result["current_intent"] == "general_question"
+    assert result["next_action"] == "general_response"
+    assert result["missing_slots"] == []
+    assert result["final_response"]
+    assert "哪款车" in result["final_response"] or "具体车型" in result["final_response"]
+
+    reply = response_node(result | {"user_message": "有现车吗", "tool_results": {}})["final_response"]
+    assert "哪款车" in reply or "具体车型" in reply
+    assert "广州白云店" not in reply
+
+
+def test_short_what_car_question_does_not_trigger_rag_recommendation():
+    from backend.agent.nodes import intent_node, response_node
+
+    result = intent_node({
+        "user_message": "什么车",
+        "purchase_intent": {"budget": "20万以内", "car_type": "SUV"},
+    })
+
+    assert result["current_intent"] == "general_question"
+    assert result["next_action"] == "general_response"
+    assert result["missing_slots"] == []
+    assert result["final_response"]
+
+    reply = response_node(result | {"user_message": "什么车", "tool_results": {}})["final_response"]
+    assert "你是想问" in reply or "具体车型" in reply
+    assert "销售资料" not in reply
+    assert "竞品对比" not in reply
+
+
 def test_acknowledgement_with_existing_purchase_intent_continues_slot_fill():
     from backend.agent.nodes import intent_node
 
@@ -630,6 +668,8 @@ if __name__ == "__main__":
     test_sales_material_question_routes_to_rag_not_slot_fill()
     test_slot_fill_does_not_add_purchase_slots_for_general_response()
     test_inventory_query_does_not_force_purchase_slots_or_appointment()
+    test_inventory_query_without_model_asks_for_target_model()
+    test_short_what_car_question_does_not_trigger_rag_recommendation()
     test_acknowledgement_with_existing_purchase_intent_continues_slot_fill()
     test_acknowledgement_with_complete_intent_routes_to_recommendation()
     test_test_drive_missing_contact_does_not_create_fake_appointment()
