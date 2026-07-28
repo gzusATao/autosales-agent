@@ -146,7 +146,7 @@ def test_two_named_models_with_choice_phrase_routes_to_compare():
     })
 
     assert result["current_intent"] == "car_compare"
-    assert result["next_action"] == "compare_car"
+    assert result["next_action"] == "rag_search"
     assert result["purchase_intent"]["intent_models"] == ["宋PLUS DM-i", "锋兰达双擎"]
 
 
@@ -237,6 +237,95 @@ def test_rag_only_response_uses_sales_materials_not_slot_question():
     assert "预算" not in reply
 
 
+def test_model_question_with_rag_docs_uses_sales_materials_before_car_search():
+    from backend.agent.nodes import response_node
+
+    state = {
+        "user_message": "宋PLUS有什么优惠",
+        "current_intent": "car_recommendation",
+        "purchase_intent": {"intent_models": ["宋PLUS DM-i"]},
+        "tool_results": {
+            "rag_docs": [
+                {
+                    "title": "比亚迪宋PLUS DM-i 优惠政策",
+                    "content": "当前优惠政策包括置换补贴、2年0息金融方案、免费赠送家用充电桩。",
+                }
+            ],
+            "search_cars": [
+                {
+                    "brand": "比亚迪",
+                    "model": "宋PLUS DM-i",
+                    "price": 169800,
+                    "energy_type": "插电混动",
+                    "fuel_consumption": "4.4 L/100km",
+                    "highlights": ["油耗低", "空间大"],
+                }
+            ],
+        },
+        "tool_trace": [],
+    }
+
+    reply = response_node(state)["final_response"]
+
+    assert "优惠政策" in reply
+    assert "置换补贴" in reply
+    assert "我会先看这几款" not in reply
+
+
+def test_model_question_without_rag_docs_uses_grounding_fallback():
+    from backend.agent.nodes import response_node
+
+    state = {
+        "user_message": "宋PLUS隐藏功能有哪些",
+        "current_intent": "car_recommendation",
+        "purchase_intent": {"intent_models": ["宋PLUS DM-i"]},
+        "tool_results": {"rag_docs": []},
+        "tool_trace": [],
+    }
+
+    reply = response_node(state)["final_response"]
+
+    assert "销售资料" in reply
+    assert "没有检索到" in reply
+    assert "不能直接编" in reply
+
+
+def test_rag_query_expansion_adds_business_terms():
+    from backend.agent.nodes import _expand_rag_query
+
+    expanded = _expand_rag_query("客户嫌宋PLUS价格贵怎么办", ["宋PLUS DM-i"])
+
+    assert "宋PLUS DM-i" in expanded
+    assert "价格异议" in expanded
+    assert "金融方案" in expanded
+
+
+def test_tool_executor_handles_rag_exception_with_fallback(monkeypatch=None):
+    from backend.agent import nodes
+
+    original = nodes.rag_search_tool
+
+    def broken_rag_search(query, top_k=5):
+        raise RuntimeError("boom")
+
+    try:
+        nodes.rag_search_tool = broken_rag_search
+        result = nodes.tool_executor({
+            "user_message": "宋PLUS有什么优惠",
+            "current_intent": "car_recommendation",
+            "next_action": "rag_search",
+            "purchase_intent": {"intent_models": ["宋PLUS DM-i"]},
+            "tool_results": {},
+            "tool_trace": [],
+        })
+    finally:
+        nodes.rag_search_tool = original
+
+    assert result["tool_results"]["rag_docs"] == []
+    assert result["tool_trace"][-1]["tool_name"] == "rag_search_tool"
+    assert result["tool_trace"][-1]["output"]["error"] == "fallback"
+
+
 if __name__ == "__main__":
     test_response_node_preserves_follow_up_question()
     test_recommendation_response_uses_search_results_not_compare_script()
@@ -250,4 +339,8 @@ if __name__ == "__main__":
     test_slot_fill_does_not_add_purchase_slots_for_general_response()
     test_acknowledgement_with_existing_purchase_intent_continues_slot_fill()
     test_rag_only_response_uses_sales_materials_not_slot_question()
+    test_model_question_with_rag_docs_uses_sales_materials_before_car_search()
+    test_model_question_without_rag_docs_uses_grounding_fallback()
+    test_rag_query_expansion_adds_business_terms()
+    test_tool_executor_handles_rag_exception_with_fallback()
     print("agent response checks passed")

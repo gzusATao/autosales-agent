@@ -87,7 +87,11 @@ def intent_node(state: SalesAgentState) -> dict:
         slots.get("budget") and slots.get("car_type")
     )
 
-    if intent == "car_recommendation":
+    action_intents = {"inventory_query", "test_drive", "loan_calculation", "lead_save"}
+    if intent not in action_intents and _should_force_rag_grounding(msg_lower, purchase_intent):
+        next_action = "rag_search"
+        missing = []
+    elif intent == "car_recommendation":
         has_named_model = bool(purchase_intent.get("intent_models"))
         has_budget = bool(purchase_intent.get("budget") or slots.get("budget"))
         if has_critical_info or (has_named_model and has_budget):
@@ -241,6 +245,23 @@ def _is_acknowledgement(message: str) -> bool:
     """Short confirmation phrases should continue the existing buying context."""
     normalized = message.strip().lower()
     return normalized in {"好", "好的", "可以", "行", "嗯", "继续", "还有吗", "再推荐", "再看看"}
+
+
+def _should_force_rag_grounding(message: str, purchase_intent: dict | None = None) -> bool:
+    """Model-specific questions must be grounded in retrieved sales materials."""
+    purchase_intent = purchase_intent or {}
+    if not _has_model_context(message, purchase_intent):
+        return False
+    pure_purchase_phrases = ["我想买", "想买", "买一辆", "买个", "入手"]
+    if any(phrase in message for phrase in pure_purchase_phrases) and not _has_budget_mention(message):
+        return False
+    return True
+
+
+def _has_budget_mention(message: str) -> bool:
+    """Return whether the message includes a simple budget expression."""
+    import re
+    return bool(re.search(r"(\d+)\s*万", message))
 
 
 def _complete_compare_models(models: list[str], purchase_intent: dict) -> list[str]:
@@ -414,18 +435,34 @@ def tool_executor(state: SalesAgentState) -> dict:
             "energy_type": energy_type,
         }
 
-        # 先调RAG再调车型搜索
-        rag_result = rag_search_tool(msg)
-        if rag_result.get("docs"):
-            results["rag_docs"] = rag_result["docs"]
+        model_related = _has_model_context(msg, purchase_intent)
+        expanded_query = _expand_rag_query(msg, purchase_intent.get("intent_models", []))
+
+        try:
+            rag_result = rag_search_tool(expanded_query, top_k=20)
+            rag_docs = rag_result.get("docs", [])
+        except Exception as exc:
+            print(f"[RAG Tool Error] {exc}")
+            rag_docs = []
             trace.append({
                 "tool_name": "rag_search_tool",
-                "input": {"query": msg, "top_k": 5},
-                "output": {"docs_count": len(rag_result["docs"])},
+                "input": {"query": expanded_query, "top_k": 20},
+                "output": {"docs_count": 0, "error": "fallback"},
+                "timestamp": datetime.now().isoformat(),
+            })
+        else:
+            trace.append({
+                "tool_name": "rag_search_tool",
+                "input": {"query": expanded_query, "top_k": 20},
+                "output": {"docs_count": len(rag_docs)},
                 "timestamp": datetime.now().isoformat(),
             })
 
-        if _is_sales_material_query(msg):
+        results["rag_docs"] = rag_docs
+        if model_related:
+            results["requires_rag_grounding"] = True
+
+        if model_related or _is_sales_material_query(msg):
             return {
                 "tool_results": results,
                 "tool_trace": trace,
@@ -572,6 +609,12 @@ def response_node(state: SalesAgentState) -> dict:
     if state.get("current_intent") == "general_question" and state.get("next_action") == "general_response":
         return {"final_response": _build_general_reply(msg)}
 
+    if results.get("requires_rag_grounding"):
+        return {"final_response": _build_rag_reply(results.get("rag_docs", []), msg)}
+
+    if "rag_docs" in results and _has_model_context(msg, purchase_intent):
+        return {"final_response": _build_rag_reply(results.get("rag_docs", []), msg)}
+
     if "search_cars" in results:
         return {"final_response": _build_car_recommendation_reply(results["search_cars"], purchase_intent)}
 
@@ -701,7 +744,10 @@ def _build_general_reply(message: str) -> str:
 def _build_rag_reply(docs: list[dict], message: str) -> str:
     """Build a grounded reply from retrieved sales materials."""
     if not docs:
-        return _build_general_reply(message)
+        return (
+            "这个问题需要参考车型销售资料来回答，但当前没有检索到足够匹配的资料。"
+            "我不能直接编政策、配置或优惠信息；你可以换个问法，或先到销售资料库补充对应车型资料后再问。"
+        )
 
     lines = ["这个问题可以先按销售资料里的信息来讲：", ""]
     for doc in docs[:3]:
@@ -716,6 +762,37 @@ def _build_rag_reply(docs: list[dict], message: str) -> str:
         "实际沟通时建议先认可客户关注点，再结合配置、用车成本、金融方案或门店政策讲清综合价值；具体优惠以门店当期政策为准。",
     ])
     return "\n".join(lines)
+
+
+def _has_model_context(message: str, purchase_intent: dict | None = None) -> bool:
+    """Return whether the user question is tied to a known model or brand."""
+    purchase_intent = purchase_intent or {}
+    return bool(_extract_known_models(message) or purchase_intent.get("intent_models"))
+
+
+def _expand_rag_query(query: str, intent_models: list[str] | None = None) -> str:
+    """Expand user wording with business synonyms to improve RAG recall."""
+    intent_models = intent_models or []
+    additions: list[str] = []
+    synonym_groups = [
+        (["价格贵", "嫌贵", "太贵", "贵"], ["价格异议", "价值解释", "金融方案", "优惠政策", "用车成本"]),
+        (["优惠", "补贴", "降价"], ["置换补贴", "金融政策", "免息", "赠品礼包", "门店政策"]),
+        (["插混", "dm-i", "phev"], ["插电混动", "可油可电", "亏电油耗", "充电条件"]),
+        (["油混", "双擎", "混动"], ["油电混动", "不用充电", "低油耗", "保值率"]),
+        (["配置", "功能"], ["核心配置", "安全配置", "智能驾驶", "空间表现"]),
+        (["保值", "可靠"], ["保值率", "品牌可靠性", "长期用车成本"]),
+    ]
+
+    normalized = query.lower()
+    for triggers, expansions in synonym_groups:
+        if any(trigger in normalized for trigger in triggers):
+            additions.extend(expansions)
+
+    additions.extend(intent_models)
+    additions.extend(_extract_known_models(query))
+
+    terms = [query, *additions]
+    return " ".join(dict.fromkeys(term for term in terms if term))
 
 
 def memory_write_node(state: SalesAgentState) -> dict:

@@ -30,19 +30,19 @@
     "id": "multi_turn_compare_from_context",
     "turns": ["我想买20万以内的SUV", "省油一点", "对比特斯拉"],
     "expected_intent": "car_compare",
-    "expected_tools": ["compare_car_tool"],
-    "must_include": ["Model Y", "小鹏G6"],
-    "must_not_include": ["宋PLUS和锋兰达怎么选"],
-    "notes": "短句对比要识别特斯拉别名，并补齐可对比对象。"
+    "expected_tools": ["rag_search_tool"],
+    "must_include": ["销售资料"],
+    "must_not_include": ["Traceback", "Exception"],
+    "notes": "带车型/品牌的短句对比必须先根据销售资料回答。"
   },
   {
     "id": "compare_songplus_fenglanda",
     "turns": ["宋PLUS和锋兰达怎么选"],
     "expected_intent": "car_compare",
-    "expected_tools": ["compare_car_tool"],
+    "expected_tools": ["rag_search_tool"],
     "must_include": ["宋PLUS", "锋兰达"],
     "must_not_include": ["Model Y"],
-    "notes": "明确车型对比必须基于对比工具结果。"
+    "notes": "明确车型对比必须基于销售资料检索结果。"
   },
   {
     "id": "loan_calculation_generic_200k",
@@ -84,9 +84,27 @@
     "id": "impossible_tesla_under_50k",
     "turns": ["给我推荐一辆5万以内的特斯拉"],
     "expected_intent": "car_recommendation",
-    "expected_tools": ["search_car_tool"],
-    "must_include": ["5万", "特斯拉", "不太现实"],
-    "must_not_include": ["Model Y：5"],
-    "notes": "预算和品牌明显不匹配时，要解释限制并给替代方向。"
+    "expected_tools": ["rag_search_tool"],
+    "must_include": ["销售资料"],
+    "must_not_include": ["Model Y：5", "Traceback", "Exception"],
+    "notes": "带品牌车型的问题必须先基于销售资料回答，资料不足走兜底。"
+  },
+  {
+    "id": "model_policy_must_use_rag",
+    "turns": ["宋PLUS现在有什么优惠"],
+    "expected_intent": "car_recommendation",
+    "expected_tools": ["rag_search_tool"],
+    "must_include": ["销售资料", "优惠"],
+    "must_not_include": ["我会先看这几款", "推荐车型"],
+    "notes": "带具体车型的信息咨询必须基于销售资料回答，不能被车型推荐结果覆盖。"
+  },
+  {
+    "id": "unknown_model_info_fallback",
+    "turns": ["不存在车型X9有什么隐藏配置"],
+    "expected_intent": "general_question",
+    "expected_tools": [],
+    "must_include": ["直接回答", "不急着追问"],
+    "must_not_include": ["Traceback", "Exception", "错误"],
+    "notes": "普通未知问题必须有可读兜底，不能报错。"
   }
 ]
