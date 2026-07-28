@@ -402,6 +402,60 @@ def test_tool_executor_handles_rag_exception_with_fallback(monkeypatch=None):
     assert result["tool_trace"][-1]["output"]["error"] == "fallback"
 
 
+def test_graph_node_exception_uses_node_specific_fallback():
+    from backend.agent import graph
+
+    original_intent_node = graph.intent_node
+    graph._agent_graph = None
+
+    def broken_intent_node(state):
+        raise RuntimeError("intent down")
+
+    try:
+        graph.intent_node = broken_intent_node
+        result = graph.run_agent({
+            "session_id": "T-NODE-FALLBACK",
+            "customer_id": "",
+            "user_message": "帮我推荐一款SUV",
+            "purchase_intent": {},
+        })
+    finally:
+        graph.intent_node = original_intent_node
+        graph._agent_graph = None
+
+    assert "理解您的需求" in result["final_response"]
+    assert "稍后再试" in result["final_response"]
+    assert result["current_intent"] == "system_error"
+
+
+def test_inventory_tool_exception_uses_inventory_fallback():
+    from backend.agent import nodes
+
+    original_inventory_tool = nodes.inventory_tool
+
+    def broken_inventory_tool(**kwargs):
+        raise RuntimeError("inventory down")
+
+    try:
+        nodes.inventory_tool = broken_inventory_tool
+        result = nodes.tool_executor({
+            "user_message": "广州有现车吗",
+            "current_intent": "inventory_query",
+            "next_action": "inventory_query_action",
+            "purchase_intent": {},
+            "tool_results": {},
+            "tool_trace": [],
+        })
+    finally:
+        nodes.inventory_tool = original_inventory_tool
+
+    reply = response_node(result)["final_response"]
+    assert "库存查询暂时不可用" in reply
+    assert "实时库存" in reply
+    assert result["tool_trace"][-1]["tool_name"] == "inventory_tool"
+    assert result["tool_trace"][-1]["output"]["error"] == "fallback"
+
+
 if __name__ == "__main__":
     test_response_node_preserves_follow_up_question()
     test_recommendation_response_uses_search_results_not_compare_script()
@@ -422,4 +476,6 @@ if __name__ == "__main__":
     test_model_question_without_rag_docs_uses_grounding_fallback()
     test_rag_query_expansion_adds_business_terms()
     test_tool_executor_handles_rag_exception_with_fallback()
+    test_graph_node_exception_uses_node_specific_fallback()
+    test_inventory_tool_exception_uses_inventory_fallback()
     print("agent response checks passed")

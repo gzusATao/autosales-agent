@@ -14,6 +14,16 @@ from backend.database import SessionLocal
 from backend.models.models import Customer, CustomerProfile, ConversationMessage
 
 
+TOOL_FALLBACK_REPLIES = {
+    "search_car_tool": "抱歉，当前车型库查询暂时不可用，我不能可靠地推荐车型。你可以稍后再试，或先补充预算、车型偏好和用途。",
+    "compare_car_tool": "抱歉，当前车型对比工具暂时不可用，我不能可靠地给出对比结论。你可以稍后再试，或先换成具体车型资料问题。",
+    "loan_calculator_tool": "抱歉，当前分期试算暂时不可用，我先不估算月供，避免给你不准确的金额。你可以稍后再试。",
+    "inventory_tool": "抱歉，当前库存查询暂时不可用，我不能确认现车情况。你可以稍后再查，或联系门店确认实时库存。",
+    "test_drive_tool": "抱歉，当前试驾预约系统暂时不可用，暂时没能创建试驾预约。你可以稍后再试，或先留下姓名和手机号，方便门店跟进确认。",
+    "lead_save_tool": "抱歉，当前线索保存暂时不可用，但我已经收到你的需求。请稍后再试，或让销售顾问手动跟进。",
+}
+
+
 INTENT_SYSTEM_PROMPT = """你是一个汽车销售Agent的意图识别模块。
 请分析用户的输入，识别其购车意图，并抽取需求字段。
 输出JSON格式：{
@@ -407,6 +417,24 @@ def tool_executor(state: SalesAgentState) -> dict:
     msg = state.get("user_message", "").lower()
     purchase_intent = state.get("purchase_intent", {})
 
+    def tool_fallback(name: str, params: dict, exc: Exception) -> dict:
+        print(f"[Tool Error] {name}: {exc}")
+        trace.append({
+            "tool_name": name,
+            "input": dict(params),
+            "output": {"error": "fallback"},
+            "timestamp": datetime.now().isoformat(),
+        })
+        return {
+            "tool_results": results,
+            "tool_trace": trace,
+            "final_response": TOOL_FALLBACK_REPLIES.get(
+                name,
+                "抱歉，相关业务工具暂时不可用，请稍后再试。",
+            ),
+            "needs_memory_update": True,
+        }
+
     if action == "search_car" or action == "rag_search":
         # 尝试提取预算
         budget_max = 0
@@ -477,7 +505,10 @@ def tool_executor(state: SalesAgentState) -> dict:
                 "needs_memory_update": True,
             }
 
-        car_result = search_car_tool(**search_params)
+        try:
+            car_result = search_car_tool(**search_params)
+        except Exception as exc:
+            return tool_fallback("search_car_tool", search_params, exc)
         results["search_cars"] = car_result.get("cars", [])
         trace.append({
             "tool_name": "search_car_tool",
@@ -492,11 +523,15 @@ def tool_executor(state: SalesAgentState) -> dict:
             purchase_intent,
         )
 
-        compare_result = compare_car_tool(found)
+        compare_params = {"models": found}
+        try:
+            compare_result = compare_car_tool(found)
+        except Exception as exc:
+            return tool_fallback("compare_car_tool", compare_params, exc)
         results["compare"] = compare_result.get("cars", [])
         trace.append({
             "tool_name": "compare_car_tool",
-            "input": {"models": found},
+            "input": compare_params,
             "output": {"cars_count": len(compare_result.get("cars", []))},
             "timestamp": datetime.now().isoformat(),
         })
@@ -510,7 +545,10 @@ def tool_executor(state: SalesAgentState) -> dict:
             price = int(price_match.group(1)) * 10000
 
         default_params["car_price"] = price
-        loan_result = loan_calculator_tool(**default_params)
+        try:
+            loan_result = loan_calculator_tool(**default_params)
+        except Exception as exc:
+            return tool_fallback("loan_calculator_tool", default_params, exc)
         results["loan"] = loan_result
         trace.append({
             "tool_name": "loan_calculator_tool",
@@ -531,7 +569,10 @@ def tool_executor(state: SalesAgentState) -> dict:
 
         default_params["model"] = car_model
         default_params["city"] = city
-        inv_result = inventory_tool(**default_params)
+        try:
+            inv_result = inventory_tool(**default_params)
+        except Exception as exc:
+            return tool_fallback("inventory_tool", default_params, exc)
         results["inventory"] = inv_result.get("results", [])
         trace.append({
             "tool_name": "inventory_tool",
@@ -579,7 +620,10 @@ def tool_executor(state: SalesAgentState) -> dict:
                 "needs_memory_update": True,
             }
 
-        drive_result = test_drive_tool(**default_params)
+        try:
+            drive_result = test_drive_tool(**default_params)
+        except Exception as exc:
+            return tool_fallback("test_drive_tool", default_params, exc)
         results["test_drive"] = drive_result
         trace.append({
             "tool_name": "test_drive_tool",
@@ -597,7 +641,10 @@ def tool_executor(state: SalesAgentState) -> dict:
             "purchase_time": purchase_intent.get("purchase_time", ""),
             "follow_up_summary": f"已预约试驾 {car_model}，时间：{time_str}",
         }
-        lead_result = lead_save_tool(**lead_params)
+        try:
+            lead_result = lead_save_tool(**lead_params)
+        except Exception as exc:
+            return tool_fallback("lead_save_tool", lead_params, exc)
         results["lead_save"] = lead_result
         trace.append({
             "tool_name": "lead_save_tool",
