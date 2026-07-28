@@ -51,7 +51,7 @@ function renderCarsWorkspace(content) {
       <button class="kb-tab ${activeTab === 'search' ? 'active' : ''}" onclick="switchCarsTab('search')">资料检索</button>
     </div>
 
-    <section id="cars-tab-cars" class="kb-tab-panel ${activeTab === 'cars' ? 'active' : ''}">
+    <section id="cars-tab-cars" class="kb-tab-panel cars-tab-panel ${activeTab === 'cars' ? 'active' : ''}">
       ${renderCarsTab()}
     </section>
     <section id="cars-tab-knowledge" class="kb-tab-panel ${activeTab === 'knowledge' ? 'active' : ''}">
@@ -76,7 +76,7 @@ function switchCarsTab(tab) {
 
 function renderCarsTab() {
   return `
-    <div class="card">
+    <div class="card cars-filter-card">
       <div class="form-row" style="gap:12px;">
         <select class="form-control" id="filter-brand" style="width:140px;" onchange="renderTable()">
           <option value="">全部品牌</option>
@@ -105,8 +105,8 @@ function renderCarsTab() {
       </div>
     </div>
 
-    <div class="card responsive-table-card">
-      <div class="table-wrap">
+    <div class="card responsive-table-card cars-table-card">
+      <div class="table-wrap cars-table-scroll">
         <table>
           <thead>
             <tr>

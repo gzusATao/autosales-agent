@@ -484,6 +484,44 @@ textarea.form-control {
   display: block;
 }
 
+.cars-tab-panel.active {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: calc(100dvh - var(--topbar-h) - 190px);
+  min-height: 440px;
+  overflow: hidden;
+}
+
+.cars-filter-card {
+  flex: 0 0 auto;
+  margin-bottom: 0;
+}
+
+.cars-table-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-bottom: 0;
+  padding-bottom: 14px;
+}
+
+.cars-table-scroll {
+  height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.cars-table-scroll table {
+  min-width: 1080px;
+}
+
+.cars-table-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  box-shadow: 0 1px 0 var(--border-light);
+}
+
 .kb-management-grid {
   align-items: start;
   margin-bottom: 16px;
@@ -2149,6 +2187,24 @@ body {
   .mobile-record-list {
     display: grid;
     gap: 10px;
+  }
+
+  .cars-tab-panel.active {
+    height: calc(100dvh - var(--topbar-h) - 178px - env(safe-area-inset-bottom));
+    min-height: 420px;
+    gap: 10px;
+  }
+
+  .cars-table-card {
+    padding-bottom: 12px;
+  }
+
+  .cars-table-card .mobile-record-list {
+    max-height: 100%;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding-right: 2px;
+    -webkit-overflow-scrolling: touch;
   }
 
   .mobile-record-card,
