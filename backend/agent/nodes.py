@@ -18,7 +18,7 @@ INTENT_SYSTEM_PROMPT = """你是一个汽车销售Agent的意图识别模块。
 请分析用户的输入，识别其购车意图，并抽取需求字段。
 输出JSON格式：{
   "intent": "car_recommendation | car_compare | loan_calculation | inventory_query | test_drive | general_question | lead_save",
-  "slots": {"budget": "", "car_type": "", "energy_type": "", "usage": "", "purchase_time": ""},
+  "slots": {"budget": "", "car_type": "", "energy_type": "", "usage": "", "purchase_time": "", "intent_models": []},
   "missing_slots": []
 }"""
 
@@ -55,11 +55,31 @@ def intent_node(state: SalesAgentState) -> dict:
     intent = result.get("intent", "general_question")
     slots = result.get("slots", {})
     missing = result.get("missing_slots", [])
+    msg_lower = msg.lower()
+
+    inferred_models = _extract_known_models(msg_lower)
+    compare_like = _is_compare_query(msg_lower)
+    if _is_acknowledgement(msg_lower) and state.get("purchase_intent"):
+        intent = "car_recommendation"
+        missing = []
+    if inferred_models and not slots.get("intent_models"):
+        slots["intent_models"] = inferred_models
+    if compare_like and len(inferred_models) >= 2:
+        intent = "car_compare"
+        missing = []
+    elif inferred_models and intent == "general_question":
+        intent = "car_recommendation"
+    if _is_sales_material_query(msg_lower) and intent == "general_question":
+        intent = "general_question"
+        missing = []
 
     # 补充默认字段
     purchase_intent = state.get("purchase_intent", {})
     for key, val in slots.items():
-        if val and not purchase_intent.get(key):
+        if key == "intent_models" and val:
+            existing = purchase_intent.get(key, [])
+            purchase_intent[key] = list(dict.fromkeys([*existing, *val]))
+        elif val and not purchase_intent.get(key):
             purchase_intent[key] = val
 
     # 根据 intent 和字段完整性决定下一步
@@ -68,15 +88,20 @@ def intent_node(state: SalesAgentState) -> dict:
     )
 
     if intent == "car_recommendation":
-        if has_critical_info:
+        has_named_model = bool(purchase_intent.get("intent_models"))
+        has_budget = bool(purchase_intent.get("budget") or slots.get("budget"))
+        if has_critical_info or (has_named_model and has_budget):
             next_action = "rag_search"
         else:
             next_action = "ask_question"
     elif intent == "general_question":
-        if has_critical_info:
+        if _is_sales_material_query(msg_lower):
+            next_action = "rag_search"
+        elif has_critical_info:
             next_action = "rag_search"
         else:
-            next_action = "ask_question"
+            next_action = "general_response"
+            missing = []
     elif intent == "car_compare":
         next_action = "compare_car"
     elif intent == "loan_calculation":
@@ -137,6 +162,14 @@ def slot_fill_node(state: SalesAgentState) -> dict:
     """需求补全节点 — 合并现有信息，判断缺失"""
     profile = state.get("customer_profile", {})
     intent = state.get("purchase_intent", {})
+    current_intent = state.get("current_intent", "")
+    next_action = state.get("next_action", "")
+
+    if current_intent == "general_question" and next_action in ("general_response", "rag_search"):
+        return {
+            "purchase_intent": intent,
+            "missing_slots": [],
+        }
 
     # 从画像补充缺失字段
     for key in ("budget", "car_type", "energy_type", "usage", "purchase_time"):
@@ -155,6 +188,11 @@ def slot_fill_node(state: SalesAgentState) -> dict:
 
 def _extract_compare_models(message: str) -> list[str]:
     """Extract supported car models from explicit model names or common brand aliases."""
+    return _extract_known_models(message)
+
+
+def _extract_known_models(message: str) -> list[str]:
+    """Extract supported car models from explicit names or common brand aliases."""
     normalized = message.lower()
     alias_map = [
         ("Model Y", ["model y", "特斯拉", "tesla"]),
@@ -172,6 +210,37 @@ def _extract_compare_models(message: str) -> list[str]:
         if any(alias in normalized for alias in aliases):
             found.append(model)
     return found
+
+
+def _first_known_model(message: str, purchase_intent: dict | None = None) -> str:
+    """Return the best single model name for tool inputs."""
+    purchase_intent = purchase_intent or {}
+    intent_models = purchase_intent.get("intent_models") or []
+    if intent_models:
+        return intent_models[0]
+    models = _extract_known_models(message)
+    return models[0] if models else ""
+
+
+def _is_sales_material_query(message: str) -> bool:
+    """Identify questions better answered from sales materials than slot filling."""
+    keywords = [
+        "优惠", "政策", "价格贵", "说服", "话术", "怎么解释", "区别",
+        "保值", "质保", "金融方案", "置换", "充电桩",
+    ]
+    return any(keyword in message for keyword in keywords)
+
+
+def _is_compare_query(message: str) -> bool:
+    """Identify comparison or choice wording."""
+    keywords = ["对比", "比较", "区别", "哪个好", "怎么选", "选哪个", "vs"]
+    return any(keyword in message for keyword in keywords)
+
+
+def _is_acknowledgement(message: str) -> bool:
+    """Short confirmation phrases should continue the existing buying context."""
+    normalized = message.strip().lower()
+    return normalized in {"好", "好的", "可以", "行", "嗯", "继续", "还有吗", "再推荐", "再看看"}
 
 
 def _complete_compare_models(models: list[str], purchase_intent: dict) -> list[str]:
@@ -211,6 +280,8 @@ def route_node(state: SalesAgentState) -> dict:
 
     # 仅当意图不明且完全缺失关键信息时转为追问
     intent = state.get("current_intent", "")
+    if action == "rag_search" and _is_sales_material_query(state.get("user_message", "").lower()):
+        return {"next_action": "rag_search"}
     if action == "rag_search" and intent in ("general_question",) and len(missing) >= 3:
         return {"next_action": "ask_question"}
 
@@ -238,7 +309,20 @@ def ask_question_node(state: SalesAgentState) -> dict:
     if not questions:
         questions.append("请问您对车型还有哪些具体要求？我可以帮您做精准推荐。")
 
-    reply = "要推荐得更准，我还需要确认这几项：\n" + "\n".join(f"- {q}" for q in questions[:3])
+    known_parts = []
+    if intent.get("budget"):
+        known_parts.append(intent["budget"])
+    if intent.get("car_type"):
+        known_parts.append(intent["car_type"])
+    if intent.get("intent_models"):
+        known_parts.append("、".join(intent["intent_models"][:2]))
+
+    if known_parts:
+        intro = f"目前我先按{'、'.join(known_parts)}这个方向理解。要推荐得更准，我再确认一下："
+    else:
+        intro = "要推荐得更准，我还需要确认这几项："
+
+    reply = intro + "\n" + "\n".join(f"- {q}" for q in questions[:3])
 
     return {"final_response": reply}
 
@@ -341,6 +425,13 @@ def tool_executor(state: SalesAgentState) -> dict:
                 "timestamp": datetime.now().isoformat(),
             })
 
+        if _is_sales_material_query(msg):
+            return {
+                "tool_results": results,
+                "tool_trace": trace,
+                "needs_memory_update": True,
+            }
+
         car_result = search_car_tool(**search_params)
         results["search_cars"] = car_result.get("cars", [])
         trace.append({
@@ -386,15 +477,8 @@ def tool_executor(state: SalesAgentState) -> dict:
     elif action == "inventory_query_action":
         # 提取车型和城市
         import re
-        car_model = purchase_intent.get("intent_models", [""])[0] if purchase_intent.get("intent_models") else ""
+        car_model = _first_known_model(msg, purchase_intent)
         city = ""
-
-        if not car_model:
-            known_models = ["宋PLUS DM-i", "锋兰达双擎", "哈弗枭龙MAX", "秦PLUS DM-i"]
-            for m in known_models:
-                if m.lower() in msg:
-                    car_model = m
-                    break
 
         city_match = re.search(r"(广州|深圳|上海|北京|成都|杭州|武汉)", msg)
         if city_match:
@@ -414,12 +498,7 @@ def tool_executor(state: SalesAgentState) -> dict:
     elif action == "test_drive_action":
         # 提取试驾信息
         import re
-        car_model = ""
-        known_models = ["宋PLUS DM-i", "锋兰达双擎", "哈弗枭龙MAX", "秦PLUS DM-i"]
-        for m in known_models:
-            if m.lower() in msg:
-                car_model = m
-                break
+        car_model = _first_known_model(msg, purchase_intent)
 
         store_match = re.search(r"(广州天河体验店|广州白云店|深圳南山店)", msg)
         store = store_match.group(1) if store_match else "广州天河体验店"
@@ -490,11 +569,17 @@ def response_node(state: SalesAgentState) -> dict:
     if state.get("final_response") and not results:
         return {"final_response": state["final_response"]}
 
-    if results.get("search_cars"):
+    if state.get("current_intent") == "general_question" and state.get("next_action") == "general_response":
+        return {"final_response": _build_general_reply(msg)}
+
+    if "search_cars" in results:
         return {"final_response": _build_car_recommendation_reply(results["search_cars"], purchase_intent)}
 
     if results.get("compare"):
         return {"final_response": _build_compare_reply(results["compare"])}
+
+    if results.get("rag_docs"):
+        return {"final_response": _build_rag_reply(results["rag_docs"], msg)}
 
     # 构建回复上下文
     context_parts = [f"客户消息：{msg}"]
@@ -551,6 +636,16 @@ def response_node(state: SalesAgentState) -> dict:
 def _build_car_recommendation_reply(cars: list[dict], purchase_intent: dict) -> str:
     """根据车型搜索结果生成稳定推荐文案，避免模型脱离工具结果乱答。"""
     if not cars:
+        budget = purchase_intent.get("budget", "当前预算")
+        models = purchase_intent.get("intent_models") or []
+        display_models = ["特斯拉 Model Y" if model == "Model Y" else model for model in models]
+        model_text = "、".join(display_models)
+        if model_text:
+            return (
+                f"按{budget}找{model_text}不太现实，当前车型库里没有匹配到这个价位的车型。"
+                "更稳的做法是提高预算，或先看10万级通勤车、二手车等替代方向；"
+                "如果你愿意，我可以按实际预算重新筛几款更接近的车。"
+            )
         return "按当前条件暂时没有匹配到合适车型。可以把预算、车型或能源偏好放宽一点，我再帮你筛。"
 
     budget = purchase_intent.get("budget", "")
@@ -590,6 +685,36 @@ def _build_compare_reply(cars: list[dict]) -> str:
             f"{car.get('recommendation', '')}"
         )
     lines.extend(["", "你更看重空间、用车成本，还是品牌稳定性？我可以按你的侧重点给结论。"])
+    return "\n".join(lines)
+
+
+def _build_general_reply(message: str) -> str:
+    """Answer non-buying general questions without forcing purchase slot filling."""
+    if any(word in message for word in ("你好", "您好", "在吗")):
+        return "在的。你可以直接问车型推荐、配置对比、分期月供、库存或试驾预约，我会按你的问题往下接。"
+    return (
+        "可以，这类问题我先直接回答，不急着追问预算和车型。"
+        "如果你想看具体购车方案，再告诉我预算、车型偏好或用途，我再帮你筛。"
+    )
+
+
+def _build_rag_reply(docs: list[dict], message: str) -> str:
+    """Build a grounded reply from retrieved sales materials."""
+    if not docs:
+        return _build_general_reply(message)
+
+    lines = ["这个问题可以先按销售资料里的信息来讲：", ""]
+    for doc in docs[:3]:
+        title = doc.get("title", "销售资料")
+        content = (doc.get("content") or "").strip()
+        if len(content) > 120:
+            content = content[:120].rstrip() + "..."
+        lines.append(f"- **{title}**：{content}")
+
+    lines.extend([
+        "",
+        "实际沟通时建议先认可客户关注点，再结合配置、用车成本、金融方案或门店政策讲清综合价值；具体优惠以门店当期政策为准。",
+    ])
     return "\n".join(lines)
 
 

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "recommend_suv_under_200k",
+    "turns": ["推荐几款20万以内的SUV"],
+    "expected_intent": "car_recommendation",
+    "expected_tools": ["search_car_tool"],
+    "must_include": ["宋PLUS", "锋兰达", "20"],
+    "must_not_include": ["CR-V", "Model Y"],
+    "notes": "预算明确的SUV推荐，不能推荐超预算车型。"
+  },
+  {
+    "id": "ask_missing_slots_for_tesla",
+    "turns": ["我想买特斯拉"],
+    "expected_intent": "car_recommendation",
+    "expected_tools": [],
+    "must_include": ["预算"],
+    "must_not_include": ["保证", "一定有现车"],
+    "notes": "品牌意向明确但预算和用途不足，应自然追问。"
+  },
+  {
+    "id": "ack_after_question_keeps_context",
+    "turns": ["我想买20万以内的SUV", "好的"],
+    "expected_intent": "car_recommendation",
+    "expected_tools": [],
+    "must_include": ["20万", "SUV"],
+    "must_not_include": ["重新说一下预算", "预算、车型偏好和主要用途"],
+    "notes": "用户确认上一轮问题时，不应丢失上下文或机械重复全部槽位。"
+  },
+  {
+    "id": "multi_turn_compare_from_context",
+    "turns": ["我想买20万以内的SUV", "省油一点", "对比特斯拉"],
+    "expected_intent": "car_compare",
+    "expected_tools": ["compare_car_tool"],
+    "must_include": ["Model Y", "小鹏G6"],
+    "must_not_include": ["宋PLUS和锋兰达怎么选"],
+    "notes": "短句对比要识别特斯拉别名，并补齐可对比对象。"
+  },
+  {
+    "id": "compare_songplus_fenglanda",
+    "turns": ["宋PLUS和锋兰达怎么选"],
+    "expected_intent": "car_compare",
+    "expected_tools": ["compare_car_tool"],
+    "must_include": ["宋PLUS", "锋兰达"],
+    "must_not_include": ["Model Y"],
+    "notes": "明确车型对比必须基于对比工具结果。"
+  },
+  {
+    "id": "loan_calculation_generic_200k",
+    "turns": ["20万的车首付三成月供多少"],
+    "expected_intent": "loan_calculation",
+    "expected_tools": ["loan_calculator_tool"],
+    "must_include": ["首付", "月供"],
+    "must_not_include": ["保证"],
+    "notes": "分期问题调用试算工具，说明是估算。"
+  },
+  {
+    "id": "inventory_songplus_guangzhou",
+    "turns": ["广州有宋PLUS现车吗"],
+    "expected_intent": "inventory_query",
+    "expected_tools": ["inventory_tool"],
+    "must_include": ["广州", "宋PLUS"],
+    "must_not_include": ["保证一定有"],
+    "notes": "库存事实必须走库存工具。"
+  },
+  {
+    "id": "test_drive_weekend",
+    "turns": ["帮我预约周六下午试驾宋PLUS"],
+    "expected_intent": "test_drive",
+    "expected_tools": ["test_drive_tool", "lead_save_tool"],
+    "must_include": ["预约", "宋PLUS", "周六"],
+    "must_not_include": ["无法"],
+    "notes": "试驾预约应生成预约，并沉淀线索。"
+  },
+  {
+    "id": "rag_price_objection",
+    "turns": ["价格贵怎么说服客户"],
+    "expected_intent": "general_question",
+    "expected_tools": ["rag_search_tool"],
+    "must_include": ["价格", "配置"],
+    "must_not_include": ["编一个优惠"],
+    "notes": "销售话术类问题走销售资料检索。"
+  },
+  {
+    "id": "impossible_tesla_under_50k",
+    "turns": ["给我推荐一辆5万以内的特斯拉"],
+    "expected_intent": "car_recommendation",
+    "expected_tools": ["search_car_tool"],
+    "must_include": ["5万", "特斯拉", "不太现实"],
+    "must_not_include": ["Model Y：5"],
+    "notes": "预算和品牌明显不匹配时，要解释限制并给替代方向。"
+  }
+]

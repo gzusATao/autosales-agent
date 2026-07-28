@@ -89,8 +89,165 @@ def test_compare_tesla_alias_uses_model_y():
     assert len(models) >= 2
 
 
+def test_inventory_songplus_alias_queries_real_model():
+    from backend.database import init_db
+    from backend.seed_data import seed_all
+    from backend.agent.nodes import tool_executor
+
+    init_db()
+    seed_all()
+    state = {
+        "user_message": "广州有宋PLUS现车吗",
+        "current_intent": "inventory_query",
+        "next_action": "inventory_query_action",
+        "purchase_intent": {},
+        "tool_results": {},
+        "tool_trace": [],
+    }
+
+    result = tool_executor(state)
+    inventory = result["tool_results"]["inventory"]
+    trace_input = result["tool_trace"][-1]["input"]
+
+    assert trace_input["model"] == "宋PLUS DM-i"
+    assert trace_input["city"] == "广州"
+    assert inventory
+    assert all(item["model"] == "宋PLUS DM-i" for item in inventory)
+
+
+def test_impossible_tesla_budget_reply_explains_mismatch():
+    state = {
+        "user_message": "给我推荐一辆5万以内的特斯拉",
+        "current_intent": "car_recommendation",
+        "purchase_intent": {
+            "budget": "5万以内",
+            "car_type": "SUV",
+            "energy_type": "纯电",
+            "intent_models": ["Model Y"],
+        },
+        "tool_results": {"search_cars": []},
+        "tool_trace": [],
+    }
+
+    reply = response_node(state)["final_response"]
+
+    assert "5万" in reply
+    assert "特斯拉" in reply or "Model Y" in reply
+    assert "不太现实" in reply
+    assert "提高预算" in reply or "替代" in reply
+
+
+def test_two_named_models_with_choice_phrase_routes_to_compare():
+    from backend.agent.nodes import intent_node
+
+    result = intent_node({
+        "user_message": "宋PLUS和锋兰达怎么选",
+        "purchase_intent": {},
+    })
+
+    assert result["current_intent"] == "car_compare"
+    assert result["next_action"] == "compare_car"
+    assert result["purchase_intent"]["intent_models"] == ["宋PLUS DM-i", "锋兰达双擎"]
+
+
+def test_follow_up_question_mentions_known_budget_and_car_type():
+    from backend.agent.nodes import ask_question_node
+
+    reply = ask_question_node({
+        "purchase_intent": {"budget": "20万以内", "car_type": "SUV"},
+        "missing_slots": ["energy_type"],
+    })["final_response"]
+
+    assert "20万以内" in reply
+    assert "SUV" in reply
+    assert "能源" in reply or "燃油" in reply
+
+
+def test_general_question_does_not_force_purchase_slots():
+    from backend.agent.nodes import intent_node
+
+    result = intent_node({
+        "user_message": "你们这个系统能做什么",
+        "purchase_intent": {},
+    })
+
+    assert result["current_intent"] == "general_question"
+    assert result["next_action"] == "general_response"
+    assert result["missing_slots"] == []
+
+
+def test_sales_material_question_routes_to_rag_not_slot_fill():
+    from backend.agent.nodes import intent_node
+
+    result = intent_node({
+        "user_message": "价格贵怎么说服客户",
+        "purchase_intent": {},
+    })
+
+    assert result["current_intent"] == "general_question"
+    assert result["next_action"] == "rag_search"
+    assert result["missing_slots"] == []
+
+
+def test_slot_fill_does_not_add_purchase_slots_for_general_response():
+    from backend.agent.nodes import slot_fill_node
+
+    result = slot_fill_node({
+        "current_intent": "general_question",
+        "next_action": "general_response",
+        "customer_profile": {},
+        "purchase_intent": {},
+    })
+
+    assert result["missing_slots"] == []
+
+
+def test_acknowledgement_with_existing_purchase_intent_continues_slot_fill():
+    from backend.agent.nodes import intent_node
+
+    result = intent_node({
+        "user_message": "好的",
+        "purchase_intent": {"budget": "20万以内", "car_type": "SUV"},
+    })
+
+    assert result["current_intent"] == "car_recommendation"
+    assert result["next_action"] == "ask_question"
+
+
+def test_rag_only_response_uses_sales_materials_not_slot_question():
+    state = {
+        "user_message": "价格贵怎么说服客户",
+        "current_intent": "general_question",
+        "purchase_intent": {},
+        "tool_results": {
+            "rag_docs": [
+                {
+                    "title": "价格异议处理话术",
+                    "content": "客户觉得贵时，应先认可客户对价格的关注，再结合配置、油耗和金融方案解释综合价值。",
+                }
+            ]
+        },
+        "tool_trace": [],
+    }
+
+    reply = response_node(state)["final_response"]
+
+    assert "价格" in reply
+    assert "配置" in reply
+    assert "预算" not in reply
+
+
 if __name__ == "__main__":
     test_response_node_preserves_follow_up_question()
     test_recommendation_response_uses_search_results_not_compare_script()
     test_compare_tesla_alias_uses_model_y()
+    test_inventory_songplus_alias_queries_real_model()
+    test_impossible_tesla_budget_reply_explains_mismatch()
+    test_two_named_models_with_choice_phrase_routes_to_compare()
+    test_follow_up_question_mentions_known_budget_and_car_type()
+    test_general_question_does_not_force_purchase_slots()
+    test_sales_material_question_routes_to_rag_not_slot_fill()
+    test_slot_fill_does_not_add_purchase_slots_for_general_response()
+    test_acknowledgement_with_existing_purchase_intent_continues_slot_fill()
+    test_rag_only_response_uses_sales_materials_not_slot_question()
     print("agent response checks passed")

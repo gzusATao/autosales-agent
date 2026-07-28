@@ -18,6 +18,7 @@ autosales.db-wal
 *.sqlite3
 
 .reasonix/
+evals/reports/
 
 node_modules/
 dist/

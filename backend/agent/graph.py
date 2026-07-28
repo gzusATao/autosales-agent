@@ -44,6 +44,7 @@ def build_agent_graph() -> StateGraph:
         lambda state: state["next_action"],
         {
             "ask_question": "ask_question",
+            "general_response": "response",
             "rag_search": "tool_executor",
             "search_car": "tool_executor",
             "compare_car": "tool_executor",
