@@ -106,6 +106,7 @@ def loan_calculator_tool(
     down_payment_rate: float = 0.3,
     years: int = 3,
     annual_rate: float = 0.045,
+    model: str = "",
 ) -> dict:
     """
     分期试算：首付、月供、总利息、落地价

@@ -221,6 +221,35 @@ def test_loan_tool_uses_down_payment_amount_not_as_car_price():
     assert "首付 30%" not in reply
 
 
+def test_loan_tool_uses_named_model_price_for_monthly_payment():
+    from backend.agent.nodes import intent_node, tool_executor
+
+    intent = intent_node({
+        "user_message": "瑞虎8月供多少",
+        "purchase_intent": {},
+    })
+    assert intent["current_intent"] == "loan_calculation"
+    assert intent["purchase_intent"]["intent_models"] == ["瑞虎8"]
+
+    result = tool_executor({
+        "user_message": "瑞虎8月供多少",
+        "current_intent": "loan_calculation",
+        "next_action": "loan_calculator",
+        "purchase_intent": intent["purchase_intent"],
+        "tool_results": {},
+        "tool_trace": [],
+    })
+
+    trace_input = result["tool_trace"][-1]["input"]
+    loan = result["tool_results"]["loan"]
+
+    assert trace_input["car_price"] == 109900
+    assert trace_input["model"] == "瑞虎8"
+    assert loan["model"] == "瑞虎8"
+    assert loan["down_payment"] == 32970
+    assert loan["loan_amount"] == 76930
+
+
 def test_follow_up_question_mentions_known_budget_and_car_type():
     from backend.agent.nodes import ask_question_node
 
@@ -595,6 +624,7 @@ if __name__ == "__main__":
     test_follow_up_budget_update_overrides_previous_budget()
     test_down_payment_follow_up_keeps_loan_intent_not_budget_update()
     test_loan_tool_uses_down_payment_amount_not_as_car_price()
+    test_loan_tool_uses_named_model_price_for_monthly_payment()
     test_follow_up_question_mentions_known_budget_and_car_type()
     test_general_question_does_not_force_purchase_slots()
     test_sales_material_question_routes_to_rag_not_slot_fill()

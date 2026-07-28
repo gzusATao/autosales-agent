@@ -11,7 +11,7 @@ from backend.agent.tools import TOOL_REGISTRY, search_car_tool, compare_car_tool
     loan_calculator_tool, inventory_tool, test_drive_tool, lead_save_tool, rag_search_tool
 from backend.llm import chat_completion, extract_json
 from backend.database import SessionLocal
-from backend.models.models import Customer, CustomerProfile, ConversationMessage
+from backend.models.models import Car, Customer, CustomerProfile, ConversationMessage
 
 
 TOOL_FALLBACK_REPLIES = {
@@ -339,6 +339,18 @@ def _extract_down_payment_amount(message: str) -> int:
     return int(float(match.group(1)) * 10000)
 
 
+def _lookup_model_price(model: str) -> int:
+    """Return the local car library price for an exact model name."""
+    if not model:
+        return 0
+    db = SessionLocal()
+    try:
+        car = db.query(Car).filter(Car.model == model).first()
+        return int(car.price) if car and car.price else 0
+    finally:
+        db.close()
+
+
 def _complete_compare_models(models: list[str], purchase_intent: dict) -> list[str]:
     """When the user names only one car, add a sensible competitor for demo comparison."""
     if len(models) >= 2:
@@ -597,19 +609,27 @@ def tool_executor(state: SalesAgentState) -> dict:
         # 从消息中提取车价
         import re
         price = 169800  # 默认宋PLUS
+        car_model = _first_known_model(msg, purchase_intent)
         down_payment_amount = _extract_down_payment_amount(msg)
         if not down_payment_amount:
             price_match = re.search(r"(\d+)\s*万", msg)
             if price_match:
                 price = int(price_match.group(1)) * 10000
 
+        if car_model:
+            price = _lookup_model_price(car_model) or price
+
         default_params["car_price"] = price
+        if car_model:
+            default_params["model"] = car_model
         if down_payment_amount:
             default_params["down_payment_rate"] = min(down_payment_amount, price) / price
         try:
             loan_result = loan_calculator_tool(**default_params)
         except Exception as exc:
             return tool_fallback("loan_calculator_tool", default_params, exc)
+        if car_model:
+            loan_result["model"] = car_model
         results["loan"] = loan_result
         trace.append({
             "tool_name": "loan_calculator_tool",
@@ -899,8 +919,10 @@ def _build_loan_reply(loan: dict) -> str:
         return f"¥{value:,.0f}"
 
     monthly_payment = loan.get("monthly_payment", 0)
+    model = loan.get("model", "")
+    intro = f"按{model}当前方案试算，分期结果如下：" if model else "按当前方案试算，分期结果如下："
     lines = [
-        "按当前方案试算，分期结果如下：",
+        intro,
         "",
         f"- **首付**：{money(loan.get('down_payment', 0))}",
         f"- **贷款金额**：{money(loan.get('loan_amount', 0))}",
