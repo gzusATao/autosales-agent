@@ -129,15 +129,16 @@ function renderCarsTab() {
 
 function renderKnowledgeTab() {
   return `
-    <div class="grid-2 kb-management-grid">
-      <div class="card">
+    <div class="knowledge-workspace">
+      <aside class="knowledge-side">
+      <div class="card knowledge-tool-card">
         <div class="card-header">
           <h3>上传销售资料</h3>
           <span class="tag tag-blue">Pandas 清洗</span>
         </div>
-        <form class="kb-form" onsubmit="submitKnowledgeFile(event)">
+        <form class="kb-form compact" onsubmit="submitKnowledgeFile(event)">
           <label class="form-label">选择文件</label>
-          <label class="kb-upload-box" for="kb-file">
+          <label class="kb-upload-box compact" for="kb-file">
             <input id="kb-file" type="file" accept=".pdf,.txt,.docx,.md" required>
             <strong>点击上传 PDF / TXT / Word / MD</strong>
             <span>系统会抽取文本，使用 Pandas 去空行、去重复段落，再切块入库。</span>
@@ -160,12 +161,12 @@ function renderKnowledgeTab() {
         </form>
       </div>
 
-      <div class="card">
+      <div class="card knowledge-tool-card">
         <div class="card-header">
           <h3>手动录入资料</h3>
           <span class="tag tag-cold">文本切块</span>
         </div>
-        <form class="kb-form" onsubmit="submitKnowledge(event)">
+        <form class="kb-form compact" onsubmit="submitKnowledge(event)">
           <label class="form-label">文档标题</label>
           <input class="form-control" id="kb-title" placeholder="例如：Model Y 竞品对比话术" required>
 
@@ -179,21 +180,22 @@ function renderKnowledgeTab() {
           </select>
 
           <label class="form-label">资料内容</label>
-          <textarea class="form-control kb-textarea" id="kb-content" placeholder="粘贴车型配置、优惠政策、竞品资料或销售话术..." required></textarea>
+          <textarea class="form-control kb-textarea compact" id="kb-content" placeholder="粘贴车型配置、优惠政策、竞品资料或销售话术..." required></textarea>
 
           <button class="btn btn-primary" id="kb-submit" type="submit">保存到资料库</button>
           <div class="hint" id="kb-save-status"></div>
         </form>
       </div>
 
-    </div>
+      </aside>
 
-    <div class="card">
+    <div class="card knowledge-list-card">
       <div class="card-header">
         <h3>销售资料列表</h3>
         <span class="text-muted text-sm">${knowledgeDocs.length} 篇文档</span>
       </div>
       <div id="knowledge-list"></div>
+    </div>
     </div>
   `;
 }

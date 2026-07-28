@@ -57,6 +57,21 @@ def score_turn(response: dict, case: dict) -> tuple[int, list[str]]:
     return (0 if issues else 1), issues
 
 
+def _tool_names(response: dict) -> list[str]:
+    return [item.get("tool_name", "") for item in response.get("tool_trace", [])]
+
+
+def _rag_docs(response: dict) -> list[dict]:
+    docs = []
+    for item in response.get("tool_trace", []):
+        if item.get("tool_name") == "rag_search_tool":
+            docs.append({
+                "input": item.get("input", {}),
+                "output": item.get("output", {}),
+            })
+    return docs
+
+
 def run_cases(base_url: str, cases_path: Path) -> int:
     cases = json.loads(cases_path.read_text(encoding="utf-8"))
     total = 0
@@ -66,11 +81,22 @@ def run_cases(base_url: str, cases_path: Path) -> int:
     for case in cases:
         session_id = f"EVAL-{case['id']}-{int(time.time() * 1000)}"
         last_response = {}
+        turn_records = []
         for turn in case["turns"]:
             last_response = post_json(
                 f"{base_url.rstrip('/')}/api/chat/message",
                 {"session_id": session_id, "message": turn},
             )
+            turn_records.append({
+                "user_message": turn,
+                "intent": last_response.get("current_intent", ""),
+                "purchase_intent": last_response.get("purchase_intent", {}),
+                "missing_slots": last_response.get("missing_slots", []),
+                "tools": _tool_names(last_response),
+                "tool_trace": last_response.get("tool_trace", []),
+                "rag_docs": _rag_docs(last_response),
+                "reply": last_response.get("reply", ""),
+            })
 
         total += 1
         ok, issues = score_turn(last_response, case)
@@ -79,10 +105,19 @@ def run_cases(base_url: str, cases_path: Path) -> int:
             "id": case["id"],
             "passed": bool(ok),
             "issues": issues,
+            "turns": turn_records,
+            "expected_intent": case.get("expected_intent", ""),
+            "expected_tools": case.get("expected_tools", []),
             "intent": last_response.get("current_intent", ""),
             "missing_slots": last_response.get("missing_slots", []),
-            "tools": [item.get("tool_name", "") for item in last_response.get("tool_trace", [])],
+            "tools": _tool_names(last_response),
             "reply": last_response.get("reply", ""),
+            "scores": {
+                "intent": 0 if any(issue.startswith("intent=") for issue in issues) else 1,
+                "tool_call": 0 if any("tool" in issue for issue in issues) else 1,
+                "reply_constraints": 0 if any("text" in issue for issue in issues) else 1,
+                "case": ok,
+            },
         })
 
     report_dir = ROOT / "evals" / "reports"
@@ -96,6 +131,10 @@ def run_cases(base_url: str, cases_path: Path) -> int:
         for issue in record["issues"]:
             print(f"  - {issue}")
     print(f"\nScore: {passed}/{total}")
+    print("Breakdown:")
+    for key in ("intent", "tool_call", "reply_constraints", "case"):
+        score = sum(record["scores"][key] for record in records)
+        print(f"- {key}: {score}/{total}")
     print(f"Report: {report_path}")
     return 0 if passed == total else 1
 

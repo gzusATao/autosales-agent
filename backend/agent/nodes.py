@@ -84,7 +84,8 @@ def intent_node(state: SalesAgentState) -> dict:
 
     # 根据 intent 和字段完整性决定下一步
     has_critical_info = bool(
-        slots.get("budget") and slots.get("car_type")
+        (slots.get("budget") or purchase_intent.get("budget"))
+        and (slots.get("car_type") or purchase_intent.get("car_type"))
     )
 
     action_intents = {"inventory_query", "test_drive", "loan_calculation", "lead_save"}
@@ -168,6 +169,13 @@ def slot_fill_node(state: SalesAgentState) -> dict:
     intent = state.get("purchase_intent", {})
     current_intent = state.get("current_intent", "")
     next_action = state.get("next_action", "")
+
+    transactional_intents = {"inventory_query", "loan_calculation", "test_drive", "lead_save"}
+    if current_intent in transactional_intents:
+        return {
+            "purchase_intent": intent,
+            "missing_slots": [],
+        }
 
     if current_intent == "general_question" and next_action in ("general_response", "rag_search"):
         return {
@@ -558,9 +566,18 @@ def tool_executor(state: SalesAgentState) -> dict:
             finally:
                 db.close()
 
-        if not default_params.get("customer_name"):
-            default_params["customer_name"] = "张先生"
-            default_params["phone"] = "13800000000"
+        if not default_params.get("customer_name") or not default_params.get("phone"):
+            model_text = default_params.get("model") or "这款车"
+            time_text = default_params.get("appointment_time") or "你方便的时间"
+            return {
+                "tool_results": results,
+                "tool_trace": trace,
+                "final_response": (
+                    f"可以先帮你预留 {model_text} 的试驾意向，时间按{time_text}理解。"
+                    "正式创建预约前，还需要确认你的姓名和手机号，方便门店联系确认。"
+                ),
+                "needs_memory_update": True,
+            }
 
         drive_result = test_drive_tool(**default_params)
         results["test_drive"] = drive_result
@@ -624,6 +641,9 @@ def response_node(state: SalesAgentState) -> dict:
     if results.get("rag_docs"):
         return {"final_response": _build_rag_reply(results["rag_docs"], msg)}
 
+    if "inventory" in results:
+        return {"final_response": _build_inventory_reply(results.get("inventory", []), msg)}
+
     # 构建回复上下文
     context_parts = [f"客户消息：{msg}"]
 
@@ -674,6 +694,37 @@ def response_node(state: SalesAgentState) -> dict:
         pass
 
     return {"final_response": reply_text}
+
+
+def _build_inventory_reply(inventories: list[dict], message: str) -> str:
+    """Build a factual inventory answer without forcing purchase slot collection."""
+    import re
+
+    city_match = re.search(r"(广州|深圳|上海|北京|成都|杭州|武汉)", message)
+    city_text = city_match.group(1) if city_match else "当前"
+    if not inventories:
+        return (
+            f"按当前库存工具查询，{city_text}暂时没有匹配到可直接交付的现车。"
+            "你可以补充具体车型或颜色，我再按门店库存帮你查一次。"
+        )
+
+    grouped: dict[str, list[str]] = {}
+    for inv in inventories:
+        store = inv.get("store_name") or "门店"
+        color = inv.get("color") or "颜色待确认"
+        delivery = inv.get("delivery_time") or "交付时间待确认"
+        stock_count = inv.get("stock_count", 0)
+        status = "有现车" if stock_count > 0 else "暂无现车"
+        grouped.setdefault(store, []).append(f"{color}（{status}，{delivery}）")
+
+    lines = [f"根据库存工具查询，{city_text}目前有这些库存信息：", ""]
+    for store, items in grouped.items():
+        lines.append(f"- **{store}**：{'、'.join(items)}")
+    lines.extend([
+        "",
+        "如果你已经有目标车型或颜色，可以直接告诉我，我继续按门店帮你缩小范围。",
+    ])
+    return "\n".join(lines)
 
 
 def _build_car_recommendation_reply(cars: list[dict], purchase_intent: dict) -> str:

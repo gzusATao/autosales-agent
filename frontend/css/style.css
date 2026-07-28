@@ -489,9 +489,41 @@ textarea.form-control {
   margin-bottom: 16px;
 }
 
+.knowledge-workspace {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.knowledge-side {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.knowledge-tool-card {
+  padding: 20px 22px;
+}
+
+.knowledge-list-card {
+  min-width: 0;
+  min-height: min(680px, calc(100dvh - var(--topbar-h) - 210px));
+}
+
+.knowledge-list-card #knowledge-list {
+  max-height: calc(100dvh - var(--topbar-h) - 300px);
+  overflow: auto;
+  padding-right: 2px;
+}
+
 .kb-form {
   display: grid;
   gap: 10px;
+}
+
+.kb-form.compact {
+  gap: 8px;
 }
 
 .kb-upload-box {
@@ -511,6 +543,10 @@ textarea.form-control {
   background: #eff6ff;
 }
 
+.kb-upload-box.compact {
+  padding: 12px 14px;
+}
+
 .kb-upload-box input {
   width: 100%;
 }
@@ -526,6 +562,10 @@ textarea.form-control {
 
 .kb-textarea {
   min-height: 180px;
+}
+
+.kb-textarea.compact {
+  min-height: 112px;
 }
 
 .knowledge-grid {
@@ -1699,9 +1739,20 @@ body {
     padding: 8px 4px;
   }
 
+  .knowledge-workspace,
   .kb-management-grid,
   .kb-search-row {
     grid-template-columns: 1fr;
+  }
+
+  .knowledge-list-card {
+    min-height: 0;
+  }
+
+  .knowledge-list-card #knowledge-list {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
   }
 
   .knowledge-grid {

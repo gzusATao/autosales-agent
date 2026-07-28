@@ -202,6 +202,43 @@ def test_slot_fill_does_not_add_purchase_slots_for_general_response():
     assert result["missing_slots"] == []
 
 
+def test_inventory_query_does_not_force_purchase_slots_or_appointment():
+    from backend.agent.nodes import response_node, slot_fill_node
+
+    filled = slot_fill_node({
+        "current_intent": "inventory_query",
+        "next_action": "inventory_query_action",
+        "customer_profile": {},
+        "purchase_intent": {},
+    })
+
+    assert filled["missing_slots"] == []
+
+    reply = response_node({
+        "user_message": "广州有现车吗？",
+        "current_intent": "inventory_query",
+        "purchase_intent": {},
+        "tool_results": {
+            "inventory": [
+                {
+                    "city": "广州",
+                    "store_name": "广州天河体验店",
+                    "color": "白色",
+                    "stock_count": 2,
+                    "delivery_time": "最快2-3天可提车",
+                }
+            ]
+        },
+        "tool_trace": [],
+    })["final_response"]
+
+    assert "广州天河体验店" in reply
+    assert "白色" in reply
+    assert "预算" not in reply
+    assert "试驾" not in reply
+    assert "预约" not in reply
+
+
 def test_acknowledgement_with_existing_purchase_intent_continues_slot_fill():
     from backend.agent.nodes import intent_node
 
@@ -211,7 +248,46 @@ def test_acknowledgement_with_existing_purchase_intent_continues_slot_fill():
     })
 
     assert result["current_intent"] == "car_recommendation"
-    assert result["next_action"] == "ask_question"
+    assert result["next_action"] == "rag_search"
+
+
+def test_acknowledgement_with_complete_intent_routes_to_recommendation():
+    from backend.agent.nodes import intent_node
+
+    result = intent_node({
+        "user_message": "好的",
+        "purchase_intent": {
+            "budget": "20万以内",
+            "car_type": "SUV",
+            "energy_type": "混动",
+        },
+    })
+
+    assert result["current_intent"] == "car_recommendation"
+    assert result["next_action"] == "rag_search"
+
+
+def test_test_drive_missing_contact_does_not_create_fake_appointment():
+    from backend.agent.nodes import response_node, tool_executor
+
+    result = tool_executor({
+        "user_message": "帮我预约周六下午试驾宋PLUS",
+        "current_intent": "test_drive",
+        "next_action": "test_drive_action",
+        "customer_id": "",
+        "purchase_intent": {"intent_models": ["宋PLUS DM-i"]},
+        "tool_results": {},
+        "tool_trace": [],
+    })
+
+    assert result["tool_results"] == {}
+    assert result["tool_trace"] == []
+    assert "手机号" in result["final_response"]
+    assert "姓名" in result["final_response"]
+    assert "13800000000" not in result["final_response"]
+
+    reply = response_node(result)["final_response"]
+    assert "手机号" in reply
 
 
 def test_rag_only_response_uses_sales_materials_not_slot_question():
@@ -337,7 +413,10 @@ if __name__ == "__main__":
     test_general_question_does_not_force_purchase_slots()
     test_sales_material_question_routes_to_rag_not_slot_fill()
     test_slot_fill_does_not_add_purchase_slots_for_general_response()
+    test_inventory_query_does_not_force_purchase_slots_or_appointment()
     test_acknowledgement_with_existing_purchase_intent_continues_slot_fill()
+    test_acknowledgement_with_complete_intent_routes_to_recommendation()
+    test_test_drive_missing_contact_does_not_create_fake_appointment()
     test_rag_only_response_uses_sales_materials_not_slot_question()
     test_model_question_with_rag_docs_uses_sales_materials_before_car_search()
     test_model_question_without_rag_docs_uses_grounding_fallback()

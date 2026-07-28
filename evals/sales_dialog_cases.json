@@ -58,18 +58,18 @@
     "turns": ["广州有宋PLUS现车吗"],
     "expected_intent": "inventory_query",
     "expected_tools": ["inventory_tool"],
-    "must_include": ["广州", "宋PLUS"],
-    "must_not_include": ["保证一定有"],
-    "notes": "库存事实必须走库存工具。"
+    "must_include": ["广州", "体验店"],
+    "must_not_include": ["保证一定有", "预算", "试驾", "预约"],
+    "notes": "库存事实必须走库存工具；简单库存咨询不应强行追问购车槽位或推进预约。"
   },
   {
     "id": "test_drive_weekend",
     "turns": ["帮我预约周六下午试驾宋PLUS"],
     "expected_intent": "test_drive",
-    "expected_tools": ["test_drive_tool", "lead_save_tool"],
-    "must_include": ["预约", "宋PLUS", "周六"],
-    "must_not_include": ["无法"],
-    "notes": "试驾预约应生成预约，并沉淀线索。"
+    "expected_tools": [],
+    "must_include": ["姓名", "手机号"],
+    "must_not_include": ["13800000000", "预约成功"],
+    "notes": "缺少联系方式时不能用假手机号创建预约，应先追问姓名和手机号。"
   },
   {
     "id": "rag_price_objection",
