@@ -15,6 +15,14 @@ async function loadLeads() {
     const cold = leads.filter(l => l.lead_level === '低意向').length;
 
     content.innerHTML = `
+      <div class="lead-monitor-entry">
+        <div>
+          <div class="lead-monitor-title">后台监控</div>
+          <div class="lead-monitor-desc">查看 Agent 成功率、失败率、平均响应时间、点赞点踩、RAG 负反馈和工具调用健康。</div>
+        </div>
+        <a class="btn btn-primary" href="/metrics.html">${Icons.activity}<span>进入后台监控</span></a>
+      </div>
+
       <!-- 统计 -->
       <div class="stats-grid">
         <div class="stat-card"><div class="stat-label">总线索数</div><div class="stat-value">${total}</div></div>

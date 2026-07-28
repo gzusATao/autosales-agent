@@ -61,8 +61,9 @@ assert(apiJs.includes('submitFeedback'), 'frontend API should submit per-turn Ag
 assert(apiJs.includes("'/feedback'"), 'frontend API should call the feedback endpoint');
 assert(apiJs.includes('getAgentMetrics'), 'frontend API should load Agent operations metrics');
 assert(apiJs.includes("'/metrics/agent'"), 'frontend API should call the metrics endpoint');
-assert(layout.includes("id: 'metrics'"), 'sidebar should include the operations metrics page');
-assert(layout.includes("href: '/metrics.html'"), 'metrics nav should sit in the real sidebar');
+assert(layout.includes('nav-subitem'), 'sidebar should show metrics as a child entry under sales leads');
+assert(layout.includes('后台监控'), 'metrics navigation should use the backend monitoring label');
+assert(layout.includes("href=\"/metrics.html\""), 'metrics child nav should link to the monitoring page');
 assert(carsJs.includes('车型档案') && carsJs.includes('销售资料') && carsJs.includes('资料检索'), 'cars page should expose car profile and sales material tabs');
 assert(carsJs.includes('api.uploadKnowledge'), 'cars page should upload knowledge documents');
 assert(carsJs.includes('api.uploadKnowledgeFile'), 'cars page should upload PDF/TXT/Word/MD knowledge files');
@@ -100,6 +101,8 @@ assert(carsJs.includes('cars-mobile-list'), 'cars page should render a mobile ca
 assert(customersJs.includes('mobile-record-list'), 'customers page should render a mobile card list');
 assert(leadsJs.includes('mobile-record-list'), 'leads page should render a mobile card list');
 assert(appointmentsJs.includes('mobile-record-list'), 'appointments page should render a mobile card list');
+assert(leadsJs.includes('lead-monitor-entry'), 'sales leads page should include an in-page monitoring jump entry');
+assert(leadsJs.includes('进入后台监控'), 'sales leads page should offer a clear monitoring jump button');
 assert(metricsHtml.includes('/js/metrics.js'), 'metrics page should load the metrics script');
 assert(metricsJs.includes("initLayout('后台统计'"), 'metrics page should use the shared app layout');
 assert(metricsJs.includes('满意率') && metricsJs.includes('不满意率'), 'metrics page should show feedback rating signals');
