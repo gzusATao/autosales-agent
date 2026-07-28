@@ -937,6 +937,7 @@ def memory_write_node(state: SalesAgentState) -> dict:
 
     # 用 LLM 提取记忆信息
     msg = state.get("user_message", "")
+    purchase_intent = state.get("purchase_intent", {}) or {}
     result_text = chat_completion(MEMORY_SYSTEM_PROMPT, msg)
     memory_update = extract_json(result_text)
 
@@ -953,19 +954,30 @@ def memory_write_node(state: SalesAgentState) -> dict:
             profile = CustomerProfile(customer_id=customer.id)
             db.add(profile)
 
-        # 更新字段
-        for field in ("budget", "usage", "energy_type", "purchase_time", "follow_up_summary", "lead_level"):
-            if memory_update.get(field):
-                setattr(profile, field, memory_update[field])
+        # 更新字段：确定性 purchase_intent 优先，LLM 记忆抽取作为补充
+        merged_update = {
+            "budget": purchase_intent.get("budget") or memory_update.get("budget", ""),
+            "car_type": purchase_intent.get("car_type") or memory_update.get("car_type", ""),
+            "usage": purchase_intent.get("usage") or memory_update.get("usage", ""),
+            "energy_type": purchase_intent.get("energy_type") or memory_update.get("energy_type", ""),
+            "purchase_time": purchase_intent.get("purchase_time") or memory_update.get("purchase_time", ""),
+            "follow_up_summary": memory_update.get("follow_up_summary", ""),
+            "lead_level": memory_update.get("lead_level", ""),
+        }
+        for field, value in merged_update.items():
+            if value:
+                setattr(profile, field, value)
 
-        if memory_update.get("concerns"):
+        if purchase_intent.get("concerns") or memory_update.get("concerns"):
             existing = set(profile.concerns or [])
-            existing.update(memory_update["concerns"])
+            existing.update(purchase_intent.get("concerns") or [])
+            existing.update(memory_update.get("concerns") or [])
             profile.concerns = list(existing)
 
-        if memory_update.get("intent_models"):
+        if purchase_intent.get("intent_models") or memory_update.get("intent_models"):
             existing = set(profile.intent_models or [])
-            existing.update(memory_update["intent_models"])
+            existing.update(purchase_intent.get("intent_models") or [])
+            existing.update(memory_update.get("intent_models") or [])
             profile.intent_models = list(existing)
 
         db.commit()

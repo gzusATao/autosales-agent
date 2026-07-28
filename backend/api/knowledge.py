@@ -190,8 +190,35 @@ def clean_knowledge_text_with_pandas(text: str) -> str:
     df = df[df["line"].ne("")]
     df = df.drop_duplicates(subset=["line"], keep="first")
     df["length"] = df["line"].str.len()
-    df = df[df["length"] >= 2]
+    df = df[df["line"].map(_is_meaningful_knowledge_line)]
     return "\n".join(df["line"].tolist())
+
+
+def _is_meaningful_knowledge_line(line: str) -> bool:
+    """过滤无独立语义的短行，保留包含业务信息的短句。"""
+    normalized = re.sub(r"[\s\W_]+", "", line, flags=re.UNICODE)
+    if len(normalized) < 2:
+        return False
+
+    meaningless = {
+        "如下", "以下", "谢谢", "详见", "见下", "更多", "备注",
+        "第一部分", "第二部分", "第三部分",
+    }
+    if normalized in meaningless:
+        return False
+
+    if re.fullmatch(r"[一二三四五六七八九十\d]+", normalized):
+        return False
+
+    business_pattern = (
+        r"车型|价格|指导价|优惠|政策|配置|续航|油耗|金融|补贴|置换|"
+        r"库存|现车|门店|试驾|预约|客户|话术|竞品|品牌|空间|动力|"
+        r"SUV|MPV|DM|EV|PLUS|Model|L[6789]|M[789]|\d"
+    )
+    if len(normalized) < 6 and not re.search(business_pattern, line, flags=re.IGNORECASE):
+        return False
+
+    return True
 
 
 def summarize_cleaning(raw_text: str, cleaned_text: str) -> dict:

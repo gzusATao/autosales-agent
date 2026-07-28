@@ -364,13 +364,18 @@ function updateAgentPanel(response) {
 
   const tools = response.tool_trace || [];
   document.getElementById('panel-tools').innerHTML = tools.length
-    ? tools.map(tool => `
+    ? tools.map(tool => {
+      const failed = Boolean(tool.output && tool.output.error);
+      const statusText = failed ? '兜底' : '成功';
+      const statusClass = failed ? 'tool-status failed' : 'tool-status';
+      return `
       <div class="tool-timeline-item">
-        <div class="tool-name">${escapeHtml(tool.tool_name)}<span class="tool-status">成功</span></div>
+        <div class="tool-name">${escapeHtml(tool.tool_name)}<span class="${statusClass}">${statusText}</span></div>
         <div class="tool-io">参数: ${escapeHtml(Object.keys(tool.input || {}).slice(0, 3).join(', ') || '-')}</div>
         <div class="tool-io">结果: ${escapeHtml(JSON.stringify(tool.output || {}).slice(0, 90))}</div>
       </div>
-    `).join('')
+    `;
+    }).join('')
     : '<div class="text-muted" style="font-size:13px;">本轮未调用工具</div>';
 
   const profile = response.customer_profile || {};

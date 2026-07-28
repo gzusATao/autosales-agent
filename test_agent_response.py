@@ -427,6 +427,46 @@ def test_tool_executor_handles_rag_exception_with_fallback(monkeypatch=None):
     assert result["tool_trace"][-1]["output"]["error"] == "fallback"
 
 
+def test_memory_write_persists_purchase_intent_fields():
+    from backend.database import init_db, SessionLocal
+    from backend.models.models import Customer, CustomerProfile
+    from backend.agent.nodes import memory_write_node
+
+    init_db()
+    db = SessionLocal()
+    try:
+        customer = Customer(name="", phone="")
+        db.add(customer)
+        db.commit()
+        customer_id = customer.id
+    finally:
+        db.close()
+
+    memory_write_node({
+        "customer_id": str(customer_id),
+        "user_message": "我想买20万以内SUV",
+        "purchase_intent": {
+            "budget": "20万以内",
+            "car_type": "SUV",
+            "energy_type": "混动",
+            "intent_models": ["宋PLUS DM-i"],
+        },
+    })
+
+    db = SessionLocal()
+    try:
+        profile = db.query(CustomerProfile).filter(
+            CustomerProfile.customer_id == customer_id
+        ).first()
+        assert profile is not None
+        assert profile.budget == "20万以内"
+        assert profile.car_type == "SUV"
+        assert profile.energy_type == "混动"
+        assert "宋PLUS DM-i" in (profile.intent_models or [])
+    finally:
+        db.close()
+
+
 def test_graph_node_exception_uses_node_specific_fallback():
     from backend.agent import graph
 
@@ -520,6 +560,7 @@ if __name__ == "__main__":
     test_model_question_without_rag_docs_uses_grounding_fallback()
     test_rag_query_expansion_adds_business_terms()
     test_tool_executor_handles_rag_exception_with_fallback()
+    test_memory_write_persists_purchase_intent_fields()
     test_graph_node_exception_uses_node_specific_fallback()
     test_inventory_tool_exception_uses_inventory_fallback()
     test_market_hot_cars_are_seeded_with_aliases()

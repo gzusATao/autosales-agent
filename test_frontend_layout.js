@@ -67,7 +67,10 @@ assert(css.includes('.knowledge-side') && css.includes('display: contents'), 'sa
 assert(css.includes('max-height: calc(100dvh - var(--topbar-h) - 300px)'), 'sales materials list should scroll within the visible workspace');
 assert(chat.includes('new WebSocket'), 'chat should use websocket streaming for AI replies');
 assert(chat.includes('createStreamingAgentMessage'), 'chat should create an assistant bubble before streamed output arrives');
+assert(chat.includes('output && tool.output.error'), 'agent panel should mark fallback tool traces from backend output errors');
+assert(chat.includes("failed ? '兜底' : '成功'"), 'agent panel should not show failed tool traces as successful');
 assert(css.includes('.stream-thinking'), 'assistant bubble should show a thinking animation before the first streamed chunk');
+assert(css.includes('.tool-timeline-item .tool-status.failed'), 'fallback tool traces should have a distinct status style');
 assert(css.includes('@keyframes thinking-dot'), 'thinking animation should have a stable pulse keyframe');
 assert(css.includes('@media (max-width: 760px)'), 'mobile layout should have a dedicated phone breakpoint');
 assert(css.includes('grid-template-columns: repeat(6, minmax(0, 1fr))'), 'mobile sidebar should become bottom navigation');
