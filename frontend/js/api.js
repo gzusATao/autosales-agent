@@ -42,6 +42,9 @@ const api = {
     submitFeedback(data) {
         return this.request('POST', '/feedback', data);
     },
+    getAgentMetrics() {
+        return this.request('GET', '/metrics/agent');
+    },
 
     // 客户
     getCustomerProfile(id) {

@@ -13,6 +13,8 @@ const carsJs = fs.readFileSync('frontend/js/cars.js', 'utf8');
 const customersJs = fs.readFileSync('frontend/js/customers.js', 'utf8');
 const leadsJs = fs.readFileSync('frontend/js/leads.js', 'utf8');
 const appointmentsJs = fs.readFileSync('frontend/js/appointments.js', 'utf8');
+const metricsHtml = fs.readFileSync('frontend/metrics.html', 'utf8');
+const metricsJs = fs.readFileSync('frontend/js/metrics.js', 'utf8');
 
 function assert(condition, message) {
   if (!condition) {
@@ -57,6 +59,10 @@ assert(apiJs.includes('uploadKnowledgeFile'), 'frontend API should support uploa
 assert(apiJs.includes("'/knowledge'"), 'frontend API should support listing knowledge documents');
 assert(apiJs.includes('submitFeedback'), 'frontend API should submit per-turn Agent feedback');
 assert(apiJs.includes("'/feedback'"), 'frontend API should call the feedback endpoint');
+assert(apiJs.includes('getAgentMetrics'), 'frontend API should load Agent operations metrics');
+assert(apiJs.includes("'/metrics/agent'"), 'frontend API should call the metrics endpoint');
+assert(layout.includes("id: 'metrics'"), 'sidebar should include the operations metrics page');
+assert(layout.includes("href: '/metrics.html'"), 'metrics nav should sit in the real sidebar');
 assert(carsJs.includes('车型档案') && carsJs.includes('销售资料') && carsJs.includes('资料检索'), 'cars page should expose car profile and sales material tabs');
 assert(carsJs.includes('api.uploadKnowledge'), 'cars page should upload knowledge documents');
 assert(carsJs.includes('api.uploadKnowledgeFile'), 'cars page should upload PDF/TXT/Word/MD knowledge files');
@@ -81,7 +87,7 @@ assert(css.includes('.feedback-modal'), 'unsatisfied feedback reason modal shoul
 assert(css.includes('.tool-timeline-item .tool-status.failed'), 'fallback tool traces should have a distinct status style');
 assert(css.includes('@keyframes thinking-dot'), 'thinking animation should have a stable pulse keyframe');
 assert(css.includes('@media (max-width: 760px)'), 'mobile layout should have a dedicated phone breakpoint');
-assert(css.includes('grid-template-columns: repeat(6, minmax(0, 1fr))'), 'mobile sidebar should become bottom navigation');
+assert(css.includes('grid-template-columns: repeat(7, minmax(0, 1fr))'), 'mobile sidebar should include the metrics tab in bottom navigation');
 assert(css.includes('height: calc(64px + env(safe-area-inset-bottom))'), 'mobile bottom navigation should respect safe-area inset');
 assert(css.includes('height: calc(100dvh - var(--topbar-h) - 74px - env(safe-area-inset-bottom))'), 'mobile chat should use dynamic viewport height and safe area');
 assert(css.includes('.form-row .form-control') && css.includes('width: 100% !important'), 'mobile filters should stack without narrow inline widths');
@@ -94,6 +100,11 @@ assert(carsJs.includes('cars-mobile-list'), 'cars page should render a mobile ca
 assert(customersJs.includes('mobile-record-list'), 'customers page should render a mobile card list');
 assert(leadsJs.includes('mobile-record-list'), 'leads page should render a mobile card list');
 assert(appointmentsJs.includes('mobile-record-list'), 'appointments page should render a mobile card list');
+assert(metricsHtml.includes('/js/metrics.js'), 'metrics page should load the metrics script');
+assert(metricsJs.includes("initLayout('后台统计'"), 'metrics page should use the shared app layout');
+assert(metricsJs.includes('满意率') && metricsJs.includes('不满意率'), 'metrics page should show feedback rating signals');
+assert(metricsJs.includes('RAG 维护信号'), 'metrics page should expose RAG maintenance signals');
+assert(metricsJs.includes('工具调用健康'), 'metrics page should expose tool call health');
 assert(html.includes('href="/favicon.svg"'), 'chat page should include the branded favicon');
 assert(dashboardHtml.includes('href="/favicon.svg"'), 'dashboard page should include the branded favicon');
 assert(favicon.includes('aria-label="汽车销售顾问"'), 'favicon should be branded for the product');

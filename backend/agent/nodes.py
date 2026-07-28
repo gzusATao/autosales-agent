@@ -880,16 +880,26 @@ def _build_inventory_reply(inventories: list[dict], message: str) -> str:
             "你可以补充具体车型或颜色，我再按门店库存帮你查一次。"
         )
 
+    model_names = list(dict.fromkeys(
+        inv.get("model", "").strip()
+        for inv in inventories
+        if inv.get("model", "").strip()
+    ))
+    model_text = "、".join(model_names[:3])
+
     grouped: dict[str, list[str]] = {}
     for inv in inventories:
         store = inv.get("store_name") or "门店"
+        model = inv.get("model", "").strip()
         color = inv.get("color") or "颜色待确认"
         delivery = inv.get("delivery_time") or "交付时间待确认"
         stock_count = inv.get("stock_count", 0)
         status = "有现车" if stock_count > 0 else "暂无现车"
-        grouped.setdefault(store, []).append(f"{color}（{status}，{delivery}）")
+        item_prefix = f"{model} " if model and len(model_names) != 1 else ""
+        grouped.setdefault(store, []).append(f"{item_prefix}{color}（{status}，{delivery}）")
 
-    lines = [f"根据库存工具查询，{city_text}目前有这些库存信息：", ""]
+    target_text = model_text if model_text else ""
+    lines = [f"根据库存工具查询，{city_text}目前{target_text}有这些库存信息：", ""]
     for store, items in grouped.items():
         lines.append(f"- **{store}**：{'、'.join(items)}")
     lines.extend([
@@ -988,9 +998,11 @@ def _build_general_reply(message: str) -> str:
 def _build_rag_reply(docs: list[dict], message: str) -> str:
     """Build a grounded reply from retrieved sales materials."""
     if not docs:
+        topic = "、".join(_extract_known_models(message)) or message.strip() or "这个问题"
         return (
-            "这个问题需要参考车型销售资料来回答，但当前没有检索到足够匹配的资料。"
-            "我不能直接编政策、配置或优惠信息；你可以换个问法，或先到销售资料库补充对应车型资料后再问。"
+            f"目前没有“{topic}”相关资料。"
+            "这个问题需要参考车型销售资料来回答，我不能直接编政策、配置或优惠信息；"
+            "你可以换个问法，或先到销售资料库补充对应车型资料后再问。"
         )
 
     lines = ["这个问题可以先按销售资料里的信息来讲：", ""]

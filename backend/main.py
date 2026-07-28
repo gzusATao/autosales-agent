@@ -52,6 +52,7 @@ from backend.api.cars import router as car_router
 from backend.api.chat import router as chat_router
 from backend.api.customers import router as customer_router
 from backend.api.feedback import router as feedback_router
+from backend.api.metrics import router as metrics_router
 from backend.api.finance import router_appointments, router_finance, router_inventory
 from backend.api.knowledge import router as knowledge_router
 
@@ -63,6 +64,7 @@ app.include_router(router_inventory)
 app.include_router(router_appointments)
 app.include_router(knowledge_router)
 app.include_router(feedback_router)
+app.include_router(metrics_router)
 
 
 @app.get("/api/health")

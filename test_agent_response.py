@@ -317,10 +317,11 @@ def test_inventory_query_does_not_force_purchase_slots_or_appointment():
     reply = response_node({
         "user_message": "广州有现车吗？",
         "current_intent": "inventory_query",
-        "purchase_intent": {},
+        "purchase_intent": {"intent_models": ["宋PLUS DM-i"]},
         "tool_results": {
             "inventory": [
                 {
+                    "model": "宋PLUS DM-i",
                     "city": "广州",
                     "store_name": "广州天河体验店",
                     "color": "白色",
@@ -332,6 +333,7 @@ def test_inventory_query_does_not_force_purchase_slots_or_appointment():
         "tool_trace": [],
     })["final_response"]
 
+    assert "宋PLUS DM-i" in reply
     assert "广州天河体验店" in reply
     assert "白色" in reply
     assert "预算" not in reply
@@ -499,8 +501,8 @@ def test_model_question_without_rag_docs_uses_grounding_fallback():
 
     reply = response_node(state)["final_response"]
 
-    assert "销售资料" in reply
-    assert "没有检索到" in reply
+    assert "目前没有" in reply
+    assert "宋PLUS" in reply
     assert "不能直接编" in reply
 
 

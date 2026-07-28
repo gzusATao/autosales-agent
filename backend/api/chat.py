@@ -8,6 +8,7 @@ WebSocket endpoint can stream the same Agent result without duplicating logic.
 import re
 import uuid
 import json
+import time
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -15,7 +16,7 @@ from sqlalchemy.orm import Session
 from backend.agent.graph import run_agent
 from backend.agent.state import SalesAgentState
 from backend.database import get_db
-from backend.models.models import ConversationSession, Customer
+from backend.models.models import AgentRunMetric, ConversationSession, Customer
 from backend.schemas.schemas import ChatRequest, ChatResponse, ToolTraceItem
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -29,6 +30,7 @@ def chat_message(req: ChatRequest, db: Session = Depends(get_db)):
 
 def process_chat_message(req: ChatRequest, db: Session) -> ChatResponse:
     """Run one chat turn. Shared by HTTP and WebSocket transports."""
+    started_at = time.perf_counter()
     customer_id = _ensure_customer(db, req)
     session_id = _ensure_session(db, customer_id, req.session_id)
 
@@ -49,6 +51,7 @@ def process_chat_message(req: ChatRequest, db: Session) -> ChatResponse:
         print(f"[Agent Error] {exc}")
         result = state
         result["final_response"] = "抱歉，我这边遇到了一点技术问题，请稍后再试。"
+        result["runtime_error"] = type(exc).__name__
 
     reply = _polish_reply(
         result.get("final_response") or "收到，您可以再补充一下预算、车型或用途，我继续帮您分析。"
@@ -62,6 +65,20 @@ def process_chat_message(req: ChatRequest, db: Session) -> ChatResponse:
     _save_session_intent(db, session_id, purchase_intent)
 
     _save_agent_message(db, session_id, reply, tool_trace)
+    try:
+        _save_run_metric(
+            db=db,
+            session_id=session_id,
+            customer_id=str(customer_id),
+            question=req.message,
+            intent=intent,
+            tool_trace=tool_trace,
+            response_time_ms=int((time.perf_counter() - started_at) * 1000),
+            error_type=result.get("runtime_error", ""),
+        )
+    except Exception as exc:
+        db.rollback()
+        print(f"[Metrics Error] {exc}")
 
     return ChatResponse(
         reply=reply,
@@ -173,6 +190,46 @@ def _save_agent_message(db: Session, session_id: str, content: str, tool_trace: 
         tool_trace=tool_trace,
     )
     db.add(msg)
+    db.commit()
+
+
+def _save_run_metric(
+    db: Session,
+    session_id: str,
+    customer_id: str,
+    question: str,
+    intent: str,
+    tool_trace: list,
+    response_time_ms: int,
+    error_type: str = "",
+):
+    """Persist lightweight runtime data for the operations dashboard."""
+    tool_names = []
+    failed_tool_names = []
+    rag_no_result = False
+    for item in tool_trace or []:
+        name = item.get("tool_name", "")
+        if name and name not in tool_names:
+            tool_names.append(name)
+        output = item.get("output") or {}
+        if name and isinstance(output, dict) and output.get("error") and name not in failed_tool_names:
+            failed_tool_names.append(name)
+        if name == "rag_search_tool" and isinstance(output, dict) and output.get("docs_count") == 0:
+            rag_no_result = True
+
+    resolved_error_type = error_type or ("tool_fallback" if failed_tool_names else "rag_no_result" if rag_no_result else "")
+    metric = AgentRunMetric(
+        session_id=session_id,
+        customer_id=customer_id,
+        question=question,
+        intent=intent,
+        success=not resolved_error_type,
+        response_time_ms=max(response_time_ms, 0),
+        tool_names=tool_names,
+        failed_tool_names=failed_tool_names,
+        error_type=resolved_error_type,
+    )
+    db.add(metric)
     db.commit()
 
 

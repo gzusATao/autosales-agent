@@ -145,6 +145,23 @@ class AgentFeedback(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
 
 
+class AgentRunMetric(Base):
+    """Runtime metrics for one completed Agent turn."""
+    __tablename__ = "agent_run_metrics"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(64), default="", index=True)
+    customer_id = Column(String(32), default="", index=True)
+    question = Column(Text, default="")
+    intent = Column(String(64), default="", index=True)
+    success = Column(Boolean, default=True, index=True)
+    response_time_ms = Column(Integer, default=0)
+    tool_names = Column(JSON, default=list)
+    failed_tool_names = Column(JSON, default=list)
+    error_type = Column(String(64), default="", index=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+
+
 class KnowledgeDocument(Base):
     """知识库文档"""
     __tablename__ = "knowledge_documents"

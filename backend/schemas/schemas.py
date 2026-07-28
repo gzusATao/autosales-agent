@@ -61,6 +61,29 @@ class FeedbackStatsResponse(BaseModel):
     suggestions: dict = {}
 
 
+class AgentMetricsResponse(BaseModel):
+    total_runs: int
+    successful_runs: int
+    failed_runs: int
+    success_rate: float
+    failure_rate: float
+    average_response_time_ms: int
+    feedback_total: int
+    satisfied: int
+    unsatisfied: int
+    satisfaction_rate: float
+    dissatisfaction_rate: float
+    rag_negative_count: int
+    tool_success_rate: float
+    tool_call_total: int
+    tool_failure_total: int
+    tool_counts: dict = {}
+    failed_tool_counts: dict = {}
+    reason_counts: dict = {}
+    recent_failures: list[dict] = []
+    recent_bad_feedback: list[dict] = []
+
+
 # ─── 客户 ─────────────────────────────────────────
 
 class CustomerProfileResponse(BaseModel):

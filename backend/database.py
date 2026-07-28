@@ -57,6 +57,7 @@ def init_db():
         ConversationSession,
         ConversationMessage,
         AgentFeedback,
+        AgentRunMetric,
         KnowledgeDocument,
         KnowledgeChunk,
     )
