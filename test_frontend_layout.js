@@ -68,7 +68,10 @@ assert(css.includes('.stream-thinking'), 'assistant bubble should show a thinkin
 assert(css.includes('@keyframes thinking-dot'), 'thinking animation should have a stable pulse keyframe');
 assert(css.includes('@media (max-width: 760px)'), 'mobile layout should have a dedicated phone breakpoint');
 assert(css.includes('grid-template-columns: repeat(6, minmax(0, 1fr))'), 'mobile sidebar should become bottom navigation');
-assert(css.includes('height: calc(100dvh - var(--topbar-h) - 84px)'), 'mobile chat should use dynamic viewport height');
+assert(css.includes('height: calc(64px + env(safe-area-inset-bottom))'), 'mobile bottom navigation should respect safe-area inset');
+assert(css.includes('height: calc(100dvh - var(--topbar-h) - 74px - env(safe-area-inset-bottom))'), 'mobile chat should use dynamic viewport height and safe area');
+assert(css.includes('.form-row .form-control') && css.includes('width: 100% !important'), 'mobile filters should stack without narrow inline widths');
+assert(css.includes('min-width: 760px'), 'mobile tables should keep a stable horizontal scroll width');
 assert(html.includes('href="/favicon.svg"'), 'chat page should include the branded favicon');
 assert(dashboardHtml.includes('href="/favicon.svg"'), 'dashboard page should include the branded favicon');
 assert(favicon.includes('aria-label="汽车销售顾问"'), 'favicon should be branded for the product');
