@@ -66,6 +66,7 @@ assert(layout.includes('后台监控'), 'metrics navigation should use the backe
 assert(layout.includes("href: '/metrics.html'"), 'metrics nav should link to the monitoring page');
 assert(!layout.includes('nav-subitem'), 'metrics nav should align with the other top-level tabs');
 assert(html.includes('/js/layout.js?v='), 'chat page should cache-bust the shared layout script');
+assert(html.includes('/js/chat.js?v=20260729c'), 'chat page should load the latest chat script after loan picker changes');
 assert(carsJs.includes('车型档案') && carsJs.includes('销售资料') && carsJs.includes('资料检索'), 'cars page should expose car profile and sales material tabs');
 assert(carsJs.includes('api.uploadKnowledge'), 'cars page should upload knowledge documents');
 assert(carsJs.includes('api.uploadKnowledgeFile'), 'cars page should upload PDF/TXT/Word/MD knowledge files');
