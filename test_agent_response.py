@@ -179,8 +179,8 @@ def test_down_payment_follow_up_keeps_loan_intent_not_budget_update():
     from backend.agent.nodes import intent_node
 
     result = intent_node({
-        "user_message": "首付10万呢",
-        "purchase_intent": {"budget": "20万以内", "car_type": "SUV"},
+        "user_message": "首付10万分3年",
+        "purchase_intent": {"budget": "20万以内", "car_type": "SUV", "intent_models": ["宋PLUS DM-i"]},
     })
 
     assert result["current_intent"] == "loan_calculation"
@@ -192,10 +192,10 @@ def test_loan_tool_uses_down_payment_amount_not_as_car_price():
     from backend.agent.nodes import response_node, tool_executor
 
     result = tool_executor({
-        "user_message": "首付10万呢",
+        "user_message": "首付10万分3年",
         "current_intent": "loan_calculation",
         "next_action": "loan_calculator",
-        "purchase_intent": {"budget": "20万以内", "car_type": "SUV"},
+        "purchase_intent": {"budget": "20万以内", "car_type": "SUV", "intent_models": ["宋PLUS DM-i"]},
         "tool_results": {},
         "tool_trace": [],
     })
@@ -221,18 +221,41 @@ def test_loan_tool_uses_down_payment_amount_not_as_car_price():
     assert "首付 30%" not in reply
 
 
+def test_loan_with_down_payment_missing_term_asks_before_calculating():
+    from backend.agent.nodes import ask_question_node, response_node, route_node, slot_fill_node
+
+    state = {
+        "user_message": "宋PLUS首付10w",
+        "current_intent": "loan_calculation",
+        "next_action": "loan_calculator",
+        "customer_profile": {},
+        "purchase_intent": {"intent_models": ["宋PLUS DM-i"]},
+    }
+
+    filled = slot_fill_node(state)
+    assert filled["missing_slots"] == ["loan_term"]
+
+    routed = route_node(state | filled)
+    assert routed["next_action"] == "ask_question"
+
+    asked = ask_question_node(state | filled | routed)
+    reply = response_node(state | filled | routed | asked)["final_response"]
+    assert "贷款期限" in reply
+    assert "月供" not in reply
+
+
 def test_loan_tool_uses_named_model_price_for_monthly_payment():
     from backend.agent.nodes import intent_node, tool_executor
 
     intent = intent_node({
-        "user_message": "瑞虎8月供多少",
+        "user_message": "瑞虎8首付3万分3年月供多少",
         "purchase_intent": {},
     })
     assert intent["current_intent"] == "loan_calculation"
     assert intent["purchase_intent"]["intent_models"] == ["瑞虎8"]
 
     result = tool_executor({
-        "user_message": "瑞虎8月供多少",
+        "user_message": "瑞虎8首付3万分3年月供多少",
         "current_intent": "loan_calculation",
         "next_action": "loan_calculator",
         "purchase_intent": intent["purchase_intent"],
@@ -246,8 +269,33 @@ def test_loan_tool_uses_named_model_price_for_monthly_payment():
     assert trace_input["car_price"] == 109900
     assert trace_input["model"] == "瑞虎8"
     assert loan["model"] == "瑞虎8"
-    assert loan["down_payment"] == 32970
-    assert loan["loan_amount"] == 76930
+    assert loan["down_payment"] == 30000
+    assert loan["loan_amount"] == 79900
+
+
+def test_loan_tool_accepts_down_payment_percentage_and_term():
+    from backend.agent.nodes import slot_fill_node, tool_executor
+
+    state = {
+        "user_message": "宋PLUS首付30%分36期",
+        "current_intent": "loan_calculation",
+        "next_action": "loan_calculator",
+        "customer_profile": {},
+        "purchase_intent": {"intent_models": ["宋PLUS DM-i"]},
+        "tool_results": {},
+        "tool_trace": [],
+    }
+
+    filled = slot_fill_node(state)
+    assert filled["missing_slots"] == []
+
+    result = tool_executor(state | filled)
+    trace_input = result["tool_trace"][-1]["input"]
+    loan = result["tool_results"]["loan"]
+
+    assert trace_input["down_payment_rate"] == 0.3
+    assert trace_input["years"] == 3
+    assert loan["months"] == 36
 
 
 def test_follow_up_question_mentions_known_budget_and_car_type():
@@ -705,7 +753,9 @@ if __name__ == "__main__":
     test_follow_up_budget_update_overrides_previous_budget()
     test_down_payment_follow_up_keeps_loan_intent_not_budget_update()
     test_loan_tool_uses_down_payment_amount_not_as_car_price()
+    test_loan_with_down_payment_missing_term_asks_before_calculating()
     test_loan_tool_uses_named_model_price_for_monthly_payment()
+    test_loan_tool_accepts_down_payment_percentage_and_term()
     test_follow_up_question_mentions_known_budget_and_car_type()
     test_recommendation_asks_purchase_time_after_core_slots()
     test_purchase_time_follow_up_updates_existing_intent()

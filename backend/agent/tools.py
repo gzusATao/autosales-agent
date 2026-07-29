@@ -135,6 +135,8 @@ def loan_calculator_tool(
         "monthly_payment": monthly_payment,
         "total_interest": total_interest,
         "estimated_total_cost": estimated_total_cost,
+        "years": years,
+        "months": months,
     }
 
 

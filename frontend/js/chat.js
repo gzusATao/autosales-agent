@@ -68,6 +68,7 @@ function initPage() {
   thinkingText = document.getElementById('thinking-text');
 
   ensureFeedbackModal();
+  ensureLoanPickerModal();
   hideGlobalThinking();
 
   sendBtn?.addEventListener('click', sendMessage);
@@ -89,7 +90,15 @@ function initPage() {
 async function sendMessage() {
   const text = inputEl.value.trim();
   if (!text || isSending) return;
+  if (shouldOpenLoanPicker(text)) {
+    openLoanPicker(text);
+    return;
+  }
 
+  await sendResolvedMessage(text);
+}
+
+async function sendResolvedMessage(text) {
   inputEl.value = '';
   setSending(true);
   lastUserMessage = text;
@@ -125,6 +134,101 @@ async function sendMessage() {
     setSending(false);
     inputEl.focus();
   }
+}
+
+function shouldOpenLoanPicker(text) {
+  if (!/(分期|月供|贷款|按揭)/.test(text)) return false;
+  const hasDownPayment = /首付\s*\d+(?:\.\d+)?\s*(?:万|w|%)/i.test(text);
+  const hasTerm = /(?:分期|贷款|贷|分)?\s*\d+\s*年|\d+\s*(?:期|个月|月)/i.test(text);
+  return !hasDownPayment || !hasTerm;
+}
+
+function ensureLoanPickerModal() {
+  if (document.getElementById('loan-picker-modal')) return;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="loan-picker-modal" id="loan-picker-modal" aria-hidden="true">
+      <div class="loan-picker-card" role="dialog" aria-modal="true" aria-labelledby="loan-picker-title">
+        <div class="loan-picker-head">
+          <div>
+            <strong id="loan-picker-title">选择分期方案</strong>
+            <p>先补齐首付和期限，再为您试算月供。</p>
+          </div>
+          <button type="button" class="loan-picker-close" aria-label="关闭">×</button>
+        </div>
+        <div class="loan-picker-section">
+          <div class="loan-picker-label">首付比例</div>
+          <div class="loan-picker-options" data-loan-group="down">
+            <button type="button" data-value="20%">20%</button>
+            <button type="button" data-value="30%" class="selected">30%</button>
+            <button type="button" data-value="50%">50%</button>
+            <button type="button" data-value="自定义">自定义</button>
+          </div>
+          <input class="loan-picker-custom" id="loan-custom-down" placeholder="例如：首付10万 或 40%" style="display:none;">
+        </div>
+        <div class="loan-picker-section">
+          <div class="loan-picker-label">分期期限</div>
+          <div class="loan-picker-options" data-loan-group="term">
+            <button type="button" data-value="12期">12期</button>
+            <button type="button" data-value="24期">24期</button>
+            <button type="button" data-value="36期" class="selected">36期</button>
+            <button type="button" data-value="60期">60期</button>
+          </div>
+        </div>
+        <div class="loan-picker-actions">
+          <button type="button" class="btn btn-outline loan-picker-cancel">取消</button>
+          <button type="button" class="btn btn-primary loan-picker-submit">开始试算</button>
+        </div>
+      </div>
+    </div>
+  `);
+
+  document.querySelector('.loan-picker-close').addEventListener('click', closeLoanPicker);
+  document.querySelector('.loan-picker-cancel').addEventListener('click', closeLoanPicker);
+  document.querySelector('.loan-picker-submit').addEventListener('click', submitLoanPicker);
+  document.querySelectorAll('.loan-picker-options button').forEach(button => {
+    button.addEventListener('click', () => {
+      const group = button.closest('.loan-picker-options');
+      group.querySelectorAll('button').forEach(item => item.classList.remove('selected'));
+      button.classList.add('selected');
+      if (group.dataset.loanGroup === 'down') {
+        document.getElementById('loan-custom-down').style.display = button.dataset.value === '自定义' ? 'block' : 'none';
+      }
+    });
+  });
+}
+
+function openLoanPicker(text) {
+  const modal = document.getElementById('loan-picker-modal');
+  modal.dataset.baseMessage = text;
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeLoanPicker() {
+  const modal = document.getElementById('loan-picker-modal');
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden', 'true');
+  modal.dataset.baseMessage = '';
+}
+
+function submitLoanPicker() {
+  const modal = document.getElementById('loan-picker-modal');
+  const baseMessage = modal.dataset.baseMessage || inputEl.value.trim() || '分期试算';
+  const downButton = modal.querySelector('[data-loan-group="down"] .selected');
+  const termButton = modal.querySelector('[data-loan-group="term"] .selected');
+  let downText = downButton?.dataset.value || '30%';
+  if (downText === '自定义') {
+    downText = document.getElementById('loan-custom-down').value.trim();
+    if (!downText) {
+      document.getElementById('loan-custom-down').focus();
+      return;
+    }
+  }
+  if (!downText.startsWith('首付')) downText = `首付${downText}`;
+  const termText = termButton?.dataset.value || '36期';
+  const resolved = `${baseMessage} ${downText} 分${termText}`;
+  closeLoanPicker();
+  sendResolvedMessage(resolved);
 }
 
 function streamChatMessage(text, streamMessage) {

@@ -220,7 +220,14 @@ def slot_fill_node(state: SalesAgentState) -> dict:
     current_intent = state.get("current_intent", "")
     next_action = state.get("next_action", "")
 
-    transactional_intents = {"inventory_query", "loan_calculation", "test_drive", "lead_save"}
+    if current_intent == "loan_calculation":
+        missing = _missing_loan_slots(state.get("user_message", ""), intent)
+        return {
+            "purchase_intent": intent,
+            "missing_slots": missing,
+        }
+
+    transactional_intents = {"inventory_query", "test_drive", "lead_save"}
     if current_intent in transactional_intents:
         return {
             "purchase_intent": intent,
@@ -408,6 +415,71 @@ def _extract_down_payment_amount(message: str) -> int:
     return int(float(match.group(1)) * 10000)
 
 
+def _extract_down_payment_rate(message: str) -> float:
+    """Extract down-payment percentage from messages like 首付30%."""
+    import re
+
+    match = re.search(r"首付\s*(\d+(?:\.\d+)?)\s*%", message.lower())
+    if not match:
+        return 0.0
+    rate = float(match.group(1)) / 100
+    return rate if 0 < rate <= 1 else 0.0
+
+
+def _extract_loan_years(message: str) -> int:
+    """Extract explicit loan term from messages like 分3年 or 36期."""
+    import re
+
+    normalized = message.lower()
+    year_match = re.search(r"(?:分期|贷款|贷|分)?\s*(\d+)\s*年", normalized)
+    if year_match:
+        years = int(year_match.group(1))
+        return years if 1 <= years <= 5 else 0
+
+    month_match = re.search(r"(\d+)\s*(?:期|个月|月)", normalized)
+    if month_match:
+        months = int(month_match.group(1))
+        if months % 12 == 0:
+            years = months // 12
+            return years if 1 <= years <= 5 else 0
+
+    chinese_years = {
+        "一年": 1,
+        "两年": 2,
+        "二年": 2,
+        "三年": 3,
+        "四年": 4,
+        "五年": 5,
+    }
+    for text, years in chinese_years.items():
+        if text in normalized:
+            return years
+    return 0
+
+
+def _has_explicit_car_price(message: str) -> bool:
+    """Return whether the message provides a car price for loan calculation."""
+    import re
+
+    lowered = message.lower()
+    if "首付" in lowered:
+        lowered = re.sub(r"首付\s*\d+(?:\.\d+)?\s*(?:万|w)", "", lowered)
+    return bool(re.search(r"(?:车价|裸车价|总价|价格)\s*\d+(?:\.\d+)?\s*(?:万|w)", lowered))
+
+
+def _missing_loan_slots(message: str, purchase_intent: dict | None = None) -> list[str]:
+    """Validate required fields before running the loan calculator."""
+    purchase_intent = purchase_intent or {}
+    missing = []
+    if not _first_known_model(message, purchase_intent) and not _has_explicit_car_price(message):
+        missing.append("loan_model")
+    if not _extract_down_payment_amount(message) and not _extract_down_payment_rate(message):
+        missing.append("loan_down_payment")
+    if not _extract_loan_years(message):
+        missing.append("loan_term")
+    return missing
+
+
 def _lookup_model_price(model: str) -> int:
     """Return the local car library price for an exact model name."""
     if not model:
@@ -459,6 +531,8 @@ def route_node(state: SalesAgentState) -> dict:
     intent = state.get("current_intent", "")
     if action == "rag_search" and _is_sales_material_query(state.get("user_message", "").lower()):
         return {"next_action": "rag_search"}
+    if intent == "loan_calculation" and missing:
+        return {"next_action": "ask_question"}
     if action == "rag_search" and intent == "car_recommendation" and missing:
         return {"next_action": "ask_question"}
     if action == "rag_search" and intent in ("general_question",) and len(missing) >= 3:
@@ -474,6 +548,9 @@ def ask_question_node(state: SalesAgentState) -> dict:
 
     questions = []
     slot_labels = {
+        "loan_model": "请确认要试算哪款车型，或直接告诉我裸车价。",
+        "loan_down_payment": "请确认首付金额，比如首付10万。",
+        "loan_term": "请确认贷款期限，比如分3年或36期。",
         "budget": "您的购车预算大概是多少？",
         "car_type": "您想买轿车还是SUV？",
         "energy_type": "您倾向燃油、混动还是纯电？",
@@ -496,7 +573,12 @@ def ask_question_node(state: SalesAgentState) -> dict:
     if intent.get("intent_models"):
         known_parts.append("、".join(intent["intent_models"][:2]))
 
-    if known_parts:
+    if state.get("current_intent") == "loan_calculation":
+        if known_parts:
+            intro = f"目前我先按{'、'.join(known_parts)}这个方案理解。计算分期前，还需要确认："
+        else:
+            intro = "计算分期前，还需要确认："
+    elif known_parts:
         intro = f"目前我先按{'、'.join(known_parts)}这个方向理解。要推荐得更准，我再确认一下："
     else:
         intro = "要推荐得更准，我还需要确认这几项："
@@ -679,9 +761,20 @@ def tool_executor(state: SalesAgentState) -> dict:
     elif action == "loan_calculator":
         # 从消息中提取车价
         import re
+        missing_loan_slots = _missing_loan_slots(msg, purchase_intent)
+        if missing_loan_slots:
+            return {
+                "tool_results": results,
+                "tool_trace": trace,
+                "missing_slots": missing_loan_slots,
+                "next_action": "ask_question",
+                "needs_memory_update": True,
+            }
         price = 169800  # 默认宋PLUS
         car_model = _first_known_model(msg, purchase_intent)
         down_payment_amount = _extract_down_payment_amount(msg)
+        down_payment_rate = _extract_down_payment_rate(msg)
+        loan_years = _extract_loan_years(msg)
         if not down_payment_amount:
             price_match = re.search(r"(\d+)\s*万", msg)
             if price_match:
@@ -693,8 +786,12 @@ def tool_executor(state: SalesAgentState) -> dict:
         default_params["car_price"] = price
         if car_model:
             default_params["model"] = car_model
-        if down_payment_amount:
+        if down_payment_rate:
+            default_params["down_payment_rate"] = down_payment_rate
+        elif down_payment_amount:
             default_params["down_payment_rate"] = min(down_payment_amount, price) / price
+        if loan_years:
+            default_params["years"] = loan_years
         try:
             loan_result = loan_calculator_tool(**default_params)
         except Exception as exc:
@@ -1000,6 +1097,7 @@ def _build_loan_reply(loan: dict) -> str:
         return f"¥{value:,.0f}"
 
     monthly_payment = loan.get("monthly_payment", 0)
+    months = loan.get("months") or (loan.get("years", 3) * 12)
     model = loan.get("model", "")
     intro = f"按{model}当前方案试算，分期结果如下：" if model else "按当前方案试算，分期结果如下："
     lines = [
@@ -1007,7 +1105,7 @@ def _build_loan_reply(loan: dict) -> str:
         "",
         f"- **首付**：{money(loan.get('down_payment', 0))}",
         f"- **贷款金额**：{money(loan.get('loan_amount', 0))}",
-        f"- **月供**：{money(monthly_payment)}（约36期）",
+        f"- **月供**：{money(monthly_payment)}（约{months}期）",
         f"- **总利息**：{money(loan.get('total_interest', 0))}",
         "",
         "这个结果是按当前工具参数估算，实际月供还要以裸车价、金融利率、保险和门店政策为准。",
