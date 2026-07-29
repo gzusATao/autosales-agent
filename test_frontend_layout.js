@@ -80,6 +80,9 @@ assert(chat.includes('new WebSocket'), 'chat should use websocket streaming for 
 assert(chat.includes('createStreamingAgentMessage'), 'chat should create an assistant bubble before streamed output arrives');
 assert(chat.includes('renderFeedbackControls'), 'chat should render satisfaction controls after every AI answer');
 assert(chat.includes('openFeedbackModal'), 'chat should ask for a reason when the user is unsatisfied');
+assert(chat.includes('功能出错') && !chat.includes('工具调用错误'), 'feedback reasons should use customer-facing language instead of technical tool-calling terms');
+assert(chat.includes('/(分期|月供|贷款|按揭|首付)/'), 'loan picker should also open when the user only mentions down payment');
+assert(chat.includes('modal.dataset.hasDownPayment') && chat.includes("modal.dataset.hasDownPayment !== 'true'"), 'loan picker should preserve an existing down payment instead of appending a default percentage');
 assert(chat.includes('lastUserMessage'), 'feedback payload should keep the question that triggered the answer');
 assert(chat.includes('rag_chunks') || chat.includes('tool_trace'), 'feedback payload should keep tool/RAG trace context');
 assert(chat.includes('output && tool.output.error'), 'agent panel should mark fallback tool traces from backend output errors');

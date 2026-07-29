@@ -137,10 +137,16 @@ async function sendResolvedMessage(text) {
 }
 
 function shouldOpenLoanPicker(text) {
-  if (!/(分期|月供|贷款|按揭)/.test(text)) return false;
-  const hasDownPayment = /首付\s*\d+(?:\.\d+)?\s*(?:万|w|%)/i.test(text);
-  const hasTerm = /(?:分期|贷款|贷|分)?\s*\d+\s*年|\d+\s*(?:期|个月|月)/i.test(text);
-  return !hasDownPayment || !hasTerm;
+  if (!/(分期|月供|贷款|按揭|首付)/.test(text)) return false;
+  return !hasLoanDownPayment(text) || !hasLoanTerm(text);
+}
+
+function hasLoanDownPayment(text) {
+  return /首付\s*\d+(?:\.\d+)?\s*(?:万|w|%)/i.test(text);
+}
+
+function hasLoanTerm(text) {
+  return /(?:分期|贷款|贷|分)?\s*\d+\s*年|\d+\s*(?:期|个月|月)/i.test(text);
 }
 
 function ensureLoanPickerModal() {
@@ -155,7 +161,7 @@ function ensureLoanPickerModal() {
           </div>
           <button type="button" class="loan-picker-close" aria-label="关闭">×</button>
         </div>
-        <div class="loan-picker-section">
+        <div class="loan-picker-section" data-loan-section="down">
           <div class="loan-picker-label">首付比例</div>
           <div class="loan-picker-options" data-loan-group="down">
             <button type="button" data-value="20%">20%</button>
@@ -165,7 +171,7 @@ function ensureLoanPickerModal() {
           </div>
           <input class="loan-picker-custom" id="loan-custom-down" placeholder="例如：首付10万 或 40%" style="display:none;">
         </div>
-        <div class="loan-picker-section">
+        <div class="loan-picker-section" data-loan-section="term">
           <div class="loan-picker-label">分期期限</div>
           <div class="loan-picker-options" data-loan-group="term">
             <button type="button" data-value="12期">12期</button>
@@ -199,7 +205,13 @@ function ensureLoanPickerModal() {
 
 function openLoanPicker(text) {
   const modal = document.getElementById('loan-picker-modal');
+  const hasDown = hasLoanDownPayment(text);
+  const hasTerm = hasLoanTerm(text);
   modal.dataset.baseMessage = text;
+  modal.dataset.hasDownPayment = hasDown ? 'true' : 'false';
+  modal.dataset.hasTerm = hasTerm ? 'true' : 'false';
+  modal.querySelector('[data-loan-section="down"]').style.display = hasDown ? 'none' : 'block';
+  modal.querySelector('[data-loan-section="term"]').style.display = hasTerm ? 'none' : 'block';
   modal.classList.add('open');
   modal.setAttribute('aria-hidden', 'false');
 }
@@ -209,6 +221,8 @@ function closeLoanPicker() {
   modal.classList.remove('open');
   modal.setAttribute('aria-hidden', 'true');
   modal.dataset.baseMessage = '';
+  modal.dataset.hasDownPayment = '';
+  modal.dataset.hasTerm = '';
 }
 
 function submitLoanPicker() {
@@ -216,17 +230,27 @@ function submitLoanPicker() {
   const baseMessage = modal.dataset.baseMessage || inputEl.value.trim() || '分期试算';
   const downButton = modal.querySelector('[data-loan-group="down"] .selected');
   const termButton = modal.querySelector('[data-loan-group="term"] .selected');
-  let downText = downButton?.dataset.value || '30%';
-  if (downText === '自定义') {
-    downText = document.getElementById('loan-custom-down').value.trim();
-    if (!downText) {
-      document.getElementById('loan-custom-down').focus();
-      return;
+  const parts = [baseMessage];
+
+  if (modal.dataset.hasDownPayment !== 'true') {
+    let downText = downButton?.dataset.value || '30%';
+    if (downText === '自定义') {
+      downText = document.getElementById('loan-custom-down').value.trim();
+      if (!downText) {
+        document.getElementById('loan-custom-down').focus();
+        return;
+      }
     }
+    if (!downText.startsWith('首付')) downText = `首付${downText}`;
+    parts.push(downText);
   }
-  if (!downText.startsWith('首付')) downText = `首付${downText}`;
-  const termText = termButton?.dataset.value || '36期';
-  const resolved = `${baseMessage} ${downText} 分${termText}`;
+
+  if (modal.dataset.hasTerm !== 'true') {
+    const termText = termButton?.dataset.value || '36期';
+    parts.push(`分${termText}`);
+  }
+
+  const resolved = parts.join(' ');
   closeLoanPicker();
   sendResolvedMessage(resolved);
 }
@@ -469,7 +493,7 @@ function ensureFeedbackModal() {
           <button type="button" class="feedback-modal-close" aria-label="关闭">×</button>
         </div>
         <div class="feedback-reason-grid">
-          ${['答非所问', '信息不准', '资料不足', '追问太多', '工具调用错误', '其他'].map(reason => `
+          ${['答非所问', '信息不准确', '没有查到资料', '推荐不合适', '功能出错', '其他'].map(reason => `
             <label><input type="radio" name="feedback-reason" value="${reason}"> ${reason}</label>
           `).join('')}
         </div>
