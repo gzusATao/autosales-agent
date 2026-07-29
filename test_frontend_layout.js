@@ -1,4 +1,4 @@
-const fs = require('fs');
+﻿const fs = require('fs');
 
 const html = fs.readFileSync('frontend/chat.html', 'utf8');
 const css = fs.readFileSync('frontend/css/style.css', 'utf8');
@@ -66,7 +66,7 @@ assert(layout.includes('后台监控'), 'metrics navigation should use the backe
 assert(layout.includes("href: '/metrics.html'"), 'metrics nav should link to the monitoring page');
 assert(!layout.includes('nav-subitem'), 'metrics nav should align with the other top-level tabs');
 assert(html.includes('/js/layout.js?v='), 'chat page should cache-bust the shared layout script');
-assert(html.includes('/js/chat.js?v=20260729c'), 'chat page should load the latest chat script after loan picker changes');
+assert(html.includes('/js/chat.js?v=20260729d'), 'chat page should load the latest chat script after loan picker changes');
 assert(carsJs.includes('车型档案') && carsJs.includes('销售资料') && carsJs.includes('资料检索'), 'cars page should expose car profile and sales material tabs');
 assert(carsJs.includes('api.uploadKnowledge'), 'cars page should upload knowledge documents');
 assert(carsJs.includes('api.uploadKnowledgeFile'), 'cars page should upload PDF/TXT/Word/MD knowledge files');
@@ -84,6 +84,7 @@ assert(chat.includes('openFeedbackModal'), 'chat should ask for a reason when th
 assert(chat.includes('功能出错') && !chat.includes('工具调用错误'), 'feedback reasons should use customer-facing language instead of technical tool-calling terms');
 assert(chat.includes('/(分期|月供|贷款|按揭|首付)/'), 'loan picker should also open when the user only mentions down payment');
 assert(chat.includes('modal.dataset.hasDownPayment') && chat.includes("modal.dataset.hasDownPayment !== 'true'"), 'loan picker should preserve an existing down payment instead of appending a default percentage');
+assert(chat.includes('选择分期方案') && chat.includes('开始试算'), 'loan picker modal should render readable Chinese labels');
 assert(chat.includes('lastUserMessage'), 'feedback payload should keep the question that triggered the answer');
 assert(chat.includes('rag_chunks') || chat.includes('tool_trace'), 'feedback payload should keep tool/RAG trace context');
 assert(chat.includes('output && tool.output.error'), 'agent panel should mark fallback tool traces from backend output errors');

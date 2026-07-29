@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Chat page controller.
  * Uses WebSocket streaming first, with the original HTTP endpoint as fallback.
  */
@@ -254,7 +254,6 @@ function submitLoanPicker() {
   closeLoanPicker();
   sendResolvedMessage(resolved);
 }
-
 function streamChatMessage(text, streamMessage) {
   return new Promise((resolve, reject) => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';

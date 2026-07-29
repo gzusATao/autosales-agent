@@ -137,6 +137,85 @@ def test_impossible_tesla_budget_reply_explains_mismatch():
     assert "提高预算" in reply or "替代" in reply
 
 
+def test_bare_model_alias_introduces_model_not_purchase_slots():
+    from backend.agent.nodes import intent_node
+
+    result = intent_node({
+        "user_message": "modely",
+        "purchase_intent": {},
+    })
+
+    assert result["current_intent"] == "general_question"
+    assert result["next_action"] == "general_response"
+    assert result["missing_slots"] == []
+    assert result["purchase_intent"]["intent_models"] == ["Model Y"]
+    assert "Model Y" in result["final_response"]
+    assert "指导价" in result["final_response"]
+    assert "分期月供" in result["final_response"]
+    assert "销售话术" in result["final_response"]
+    assert "轿车还是SUV" not in result["final_response"]
+
+
+def test_named_model_recommendation_does_not_ask_car_type():
+    from backend.agent.nodes import slot_fill_node
+
+    result = slot_fill_node({
+        "current_intent": "car_recommendation",
+        "next_action": "ask_question",
+        "customer_profile": {},
+        "purchase_intent": {"intent_models": ["Model Y"]},
+    })
+
+    assert "car_type" not in result["missing_slots"]
+    assert "energy_type" not in result["missing_slots"]
+    assert "budget" in result["missing_slots"]
+
+
+def test_new_sedan_recommendation_clears_stale_model_context():
+    from backend.agent.nodes import intent_node, slot_fill_node
+
+    state = {
+        "user_message": "推荐30w左右的轿车",
+        "purchase_intent": {"intent_models": ["Model Y"], "energy_type": "纯电"},
+    }
+
+    intent = intent_node(state)
+    filled = slot_fill_node(state | intent | {"customer_profile": {}})
+
+    assert "intent_models" not in filled["purchase_intent"]
+    assert "energy_type" not in filled["purchase_intent"]
+    assert filled["purchase_intent"]["budget"] == "30万以内"
+    assert filled["purchase_intent"]["car_type"] == "轿车"
+    assert "car_type" not in filled["missing_slots"]
+
+
+def test_new_suv_recommendation_does_not_inherit_stale_profile_preferences():
+    from backend.agent.nodes import intent_node, slot_fill_node
+
+    state = {
+        "user_message": "推荐几款20万以内的SUV",
+        "purchase_intent": {"intent_models": ["Model Y"], "energy_type": "纯电", "usage": "轿车"},
+        "customer_profile": {
+            "intent_models": ["Model Y"],
+            "energy_type": "纯电",
+            "usage": "轿车",
+            "purchase_time": "1个月内",
+        },
+    }
+
+    intent = intent_node(state)
+    filled = slot_fill_node(state | intent)
+    purchase_intent = filled["purchase_intent"]
+
+    assert "intent_models" not in purchase_intent
+    assert purchase_intent["budget"] == "20万以内"
+    assert purchase_intent["car_type"] == "SUV"
+    assert purchase_intent.get("energy_type", "") != "纯电"
+    assert purchase_intent.get("usage", "") != "轿车"
+    assert purchase_intent.get("purchase_time", "") != "1个月内"
+    assert filled["missing_slots"] == ["energy_type", "purchase_time"]
+
+
 def test_two_named_models_with_choice_phrase_routes_to_compare():
     from backend.agent.nodes import intent_node
 
@@ -271,6 +350,38 @@ def test_loan_tool_uses_named_model_price_for_monthly_payment():
     assert loan["model"] == "瑞虎8"
     assert loan["down_payment"] == 30000
     assert loan["loan_amount"] == 79900
+
+
+def test_loan_current_message_model_overrides_previous_model_context():
+    from backend.agent.nodes import intent_node, tool_executor
+
+    message = "modely\u9996\u4ed810w \u520612\u671f"
+    intent = intent_node({
+        "user_message": message,
+        "purchase_intent": {"intent_models": ["\u5b8bPLUS DM-i"], "budget": "20\u4e07\u4ee5\u5185"},
+    })
+
+    assert intent["current_intent"] == "loan_calculation"
+    assert intent["purchase_intent"]["intent_models"][0] == "Model Y"
+
+    result = tool_executor({
+        "user_message": message,
+        "current_intent": "loan_calculation",
+        "next_action": "loan_calculator",
+        "purchase_intent": intent["purchase_intent"],
+        "tool_results": {},
+        "tool_trace": [],
+    })
+
+    trace_input = result["tool_trace"][-1]["input"]
+    loan = result["tool_results"]["loan"]
+
+    assert trace_input["model"] == "Model Y"
+    assert trace_input["car_price"] == 249900
+    assert trace_input["years"] == 1
+    assert loan["model"] == "Model Y"
+    assert loan["down_payment"] == 100000
+    assert loan["loan_amount"] == 149900
 
 
 def test_loan_tool_accepts_down_payment_percentage_and_term():
@@ -742,12 +853,113 @@ def test_market_hot_cars_are_seeded_with_aliases():
     assert "小米SU7" in found
 
 
+def test_demo_recommendation_flow_calls_car_search_after_complete_slots():
+    from backend.agent.nodes import intent_node, route_node, slot_fill_node, tool_executor
+
+    message = "\u63a8\u835020\u4e07\u4ee5\u5185\u6df7\u52a8SUV\uff0c\u8fd9\u4e2a\u6708\u4e70\u8f66"
+    state = {
+        "user_message": message,
+        "purchase_intent": {},
+        "customer_profile": {},
+        "tool_results": {},
+        "tool_trace": [],
+    }
+
+    intent = intent_node(state)
+    filled = slot_fill_node(state | intent)
+    routed = route_node(state | intent | filled)
+    result = tool_executor(state | intent | filled | routed)
+
+    tool_names = [item["tool_name"] for item in result["tool_trace"]]
+    assert intent["current_intent"] == "car_recommendation"
+    assert filled["missing_slots"] == []
+    assert routed["next_action"] == "rag_search"
+    assert "rag_search_tool" in tool_names
+    assert "search_car_tool" in tool_names
+    assert result["tool_results"]["search_cars"]
+
+
+def test_demo_compare_flow_calls_compare_tool():
+    from backend.agent.nodes import intent_node, route_node, slot_fill_node, tool_executor
+
+    message = "\u5bf9\u6bd4\u5b8bPLUS\u548c\u950b\u5170\u8fbe"
+    state = {
+        "user_message": message,
+        "purchase_intent": {},
+        "customer_profile": {},
+        "tool_results": {},
+        "tool_trace": [],
+    }
+
+    intent = intent_node(state)
+    filled = slot_fill_node(state | intent)
+    routed = route_node(state | intent | filled)
+    result = tool_executor(state | intent | filled | routed)
+
+    assert intent["current_intent"] == "car_compare"
+    assert routed["next_action"] == "compare_car"
+    assert result["tool_trace"][-1]["tool_name"] == "compare_car_tool"
+    assert len(result["tool_results"]["compare"]) >= 2
+
+
+def test_demo_loan_flow_missing_term_does_not_calculate():
+    from backend.agent.nodes import ask_question_node, route_node, slot_fill_node, tool_executor
+
+    state = {
+        "user_message": "Model Y\u9996\u4ed810w",
+        "current_intent": "loan_calculation",
+        "next_action": "loan_calculator",
+        "customer_profile": {},
+        "purchase_intent": {"intent_models": ["Model Y"]},
+        "tool_results": {},
+        "tool_trace": [],
+    }
+
+    filled = slot_fill_node(state)
+    routed = route_node(state | filled)
+    asked = ask_question_node(state | filled | routed)
+    result = tool_executor(state | filled | routed)
+
+    assert filled["missing_slots"] == ["loan_term"]
+    assert routed["next_action"] == "ask_question"
+    assert "\u8d37\u6b3e\u671f\u9650" in asked["final_response"]
+    assert result["tool_trace"] == []
+    assert "loan" not in result["tool_results"]
+
+
+def test_demo_inventory_follow_up_uses_previous_model_context():
+    from backend.agent.nodes import intent_node, route_node, slot_fill_node, tool_executor
+
+    state = {
+        "user_message": "\u5e7f\u5dde\u6709\u73b0\u8f66\u5417\uff1f",
+        "purchase_intent": {"intent_models": ["\u5b8bPLUS DM-i"]},
+        "customer_profile": {},
+        "tool_results": {},
+        "tool_trace": [],
+    }
+
+    intent = intent_node(state)
+    filled = slot_fill_node(state | intent)
+    routed = route_node(state | intent | filled)
+    result = tool_executor(state | intent | filled | routed)
+
+    trace_input = result["tool_trace"][-1]["input"]
+    assert intent["current_intent"] == "inventory_query"
+    assert routed["next_action"] == "inventory_query_action"
+    assert trace_input["model"] == "\u5b8bPLUS DM-i"
+    assert trace_input["city"] == "\u5e7f\u5dde"
+
+
 if __name__ == "__main__":
     test_response_node_preserves_follow_up_question()
     test_recommendation_response_uses_search_results_not_compare_script()
     test_compare_tesla_alias_uses_model_y()
     test_inventory_songplus_alias_queries_real_model()
     test_impossible_tesla_budget_reply_explains_mismatch()
+    test_bare_model_alias_introduces_model_not_purchase_slots()
+    test_named_model_recommendation_does_not_ask_car_type()
+    test_new_sedan_recommendation_clears_stale_model_context()
+    test_new_suv_recommendation_does_not_inherit_stale_profile_preferences()
     test_two_named_models_with_choice_phrase_routes_to_compare()
     test_explicit_compare_routes_to_compare_tool_not_rag()
     test_follow_up_budget_update_overrides_previous_budget()
@@ -755,6 +967,7 @@ if __name__ == "__main__":
     test_loan_tool_uses_down_payment_amount_not_as_car_price()
     test_loan_with_down_payment_missing_term_asks_before_calculating()
     test_loan_tool_uses_named_model_price_for_monthly_payment()
+    test_loan_current_message_model_overrides_previous_model_context()
     test_loan_tool_accepts_down_payment_percentage_and_term()
     test_follow_up_question_mentions_known_budget_and_car_type()
     test_recommendation_asks_purchase_time_after_core_slots()
@@ -777,4 +990,8 @@ if __name__ == "__main__":
     test_graph_node_exception_uses_node_specific_fallback()
     test_inventory_tool_exception_uses_inventory_fallback()
     test_market_hot_cars_are_seeded_with_aliases()
+    test_demo_recommendation_flow_calls_car_search_after_complete_slots()
+    test_demo_compare_flow_calls_compare_tool()
+    test_demo_loan_flow_missing_term_does_not_calculate()
+    test_demo_inventory_follow_up_uses_previous_model_context()
     print("agent response checks passed")

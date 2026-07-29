@@ -69,10 +69,20 @@ def intent_node(state: SalesAgentState) -> dict:
 
     inferred_models = _extract_known_models(msg_lower)
     inferred_budget = _extract_budget_text(msg_lower)
+    inferred_car_type = _extract_car_type_text(msg_lower)
+    inferred_energy_type = _extract_energy_type_text(msg_lower)
     inferred_purchase_time = _extract_purchase_time_text(msg_lower)
     finance_like = _is_finance_query(msg_lower)
     compare_like = _is_compare_query(msg_lower)
     prior_purchase_intent = state.get("purchase_intent", {})
+    if inferred_models and _is_bare_model_mention(msg_lower):
+        return {
+            "current_intent": "general_question",
+            "purchase_intent": {"intent_models": inferred_models},
+            "missing_slots": [],
+            "next_action": "general_response",
+            "final_response": _build_bare_model_reply(inferred_models[0]),
+        }
     if _is_ambiguous_model_question(msg_lower):
         return {
             "current_intent": "general_question",
@@ -106,6 +116,14 @@ def intent_node(state: SalesAgentState) -> dict:
             missing.remove("budget")
         if state.get("purchase_intent"):
             intent = "car_recommendation"
+    if inferred_car_type:
+        slots["car_type"] = inferred_car_type
+        if "car_type" in missing:
+            missing.remove("car_type")
+    if inferred_energy_type:
+        slots["energy_type"] = inferred_energy_type
+        if "energy_type" in missing:
+            missing.remove("energy_type")
     if inferred_models and not slots.get("intent_models"):
         slots["intent_models"] = inferred_models
     if inferred_purchase_time:
@@ -125,10 +143,26 @@ def intent_node(state: SalesAgentState) -> dict:
 
     # 补充默认字段
     purchase_intent = state.get("purchase_intent", {})
+    if (
+        intent == "car_recommendation"
+        and not inferred_models
+        and (slots.get("budget") or slots.get("car_type"))
+    ):
+        purchase_intent.pop("intent_models", None)
+        slots.pop("intent_models", None)
+        if not slots.get("energy_type"):
+            purchase_intent.pop("energy_type", None)
+            slots.pop("energy_type", None)
+        if not _has_usage_mention(msg_lower):
+            purchase_intent.pop("usage", None)
+            slots.pop("usage", None)
+        if not inferred_purchase_time:
+            purchase_intent.pop("purchase_time", None)
+            slots.pop("purchase_time", None)
     for key, val in slots.items():
         if key == "intent_models" and val:
             existing = purchase_intent.get(key, [])
-            purchase_intent[key] = list(dict.fromkeys([*existing, *val]))
+            purchase_intent[key] = list(dict.fromkeys([*val, *existing]))
         elif val:
             purchase_intent[key] = val
 
@@ -219,6 +253,7 @@ def slot_fill_node(state: SalesAgentState) -> dict:
     intent = state.get("purchase_intent", {})
     current_intent = state.get("current_intent", "")
     next_action = state.get("next_action", "")
+    msg_lower = state.get("user_message", "").lower()
 
     if current_intent == "loan_calculation":
         missing = _missing_loan_slots(state.get("user_message", ""), intent)
@@ -241,13 +276,21 @@ def slot_fill_node(state: SalesAgentState) -> dict:
         }
 
     # 从画像补充缺失字段
+    skip_profile_keys = set()
+    if current_intent == "car_recommendation" and _starts_new_recommendation_context(msg_lower):
+        skip_profile_keys.update({"energy_type", "usage", "purchase_time"})
     for key in ("budget", "car_type", "energy_type", "usage", "purchase_time"):
+        if key in skip_profile_keys:
+            continue
         if not intent.get(key) and profile.get(key):
             intent[key] = profile[key]
 
     # 重新计算缺失字段。购车周期是体验友好的轻量追问项：
     # 简单咨询不问；识别出购车推荐需求后，和核心槽位一起一次性追问。
-    required = ["budget", "car_type", "energy_type"]
+    if intent.get("intent_models"):
+        required = ["budget"]
+    else:
+        required = ["budget", "car_type", "energy_type"]
     missing = [k for k in required if not intent.get(k)]
     if current_intent == "car_recommendation" and not intent.get("purchase_time"):
         missing.append("purchase_time")
@@ -267,7 +310,7 @@ def _extract_known_models(message: str) -> list[str]:
     """Extract supported car models from explicit names or common brand aliases."""
     normalized = message.lower()
     alias_map = [
-        ("Model Y", ["model y", "特斯拉", "tesla"]),
+        ("Model Y", ["model y", "modely", "特斯拉", "tesla"]),
         ("小鹏G6", ["小鹏g6", "小鹏", "xpeng", "g6"]),
         ("宋PLUS DM-i", ["宋plus dm-i", "宋plus", "比亚迪宋", "比亚迪", "宋"]),
         ("锋兰达双擎", ["锋兰达双擎", "锋兰达", "丰田"]),
@@ -301,14 +344,36 @@ def _extract_known_models(message: str) -> list[str]:
     return found
 
 
+def _normalize_model_alias_text(text: str) -> str:
+    """Normalize a short model alias for exact bare-model checks."""
+    import re
+
+    return re.sub(r"[\s\-_·.]+", "", text.strip().lower())
+
+
+def _is_bare_model_mention(message: str) -> bool:
+    """Return True when the user only sent a model name/alias without an action."""
+    normalized = _normalize_model_alias_text(message.replace("？", "").replace("?", ""))
+    bare_aliases = {
+        "modely", "特斯拉", "tesla",
+        "小鹏g6", "xpeng", "g6",
+        "宋plusdmi", "宋plus", "比亚迪宋", "宋",
+        "锋兰达双擎", "锋兰达",
+        "瑞虎8", "tiggo8",
+    }
+    return normalized in bare_aliases
+
+
 def _first_known_model(message: str, purchase_intent: dict | None = None) -> str:
     """Return the best single model name for tool inputs."""
+    models = _extract_known_models(message)
+    if models:
+        return models[0]
     purchase_intent = purchase_intent or {}
     intent_models = purchase_intent.get("intent_models") or []
     if intent_models:
         return intent_models[0]
-    models = _extract_known_models(message)
-    return models[0] if models else ""
+    return ""
 
 
 def _extract_purchase_time_text(message: str) -> str:
@@ -370,6 +435,28 @@ def _build_ambiguous_model_reply() -> str:
     )
 
 
+def _build_bare_model_reply(model: str) -> str:
+    display_model = "特斯拉 Model Y" if model == "Model Y" else model
+    details = _lookup_model_details(model)
+    if details:
+        price_text = f"{details['price'] / 10000:.1f}万" if details.get("price") else "价格待确认"
+        highlights = "、".join(details.get("highlights", [])[:3]) or "综合产品力较均衡"
+        energy = details.get("energy_type") or "能源类型待确认"
+        car_type = details.get("car_type") or "车型级别待确认"
+        seat_count = f"{details.get('seat_count')}座" if details.get("seat_count") else "座位数待确认"
+        usage_cost = details.get("range_km") or details.get("fuel_consumption") or "用车成本信息待确认"
+        return (
+            f"{display_model} 可以先这样看：指导价约 {price_text}，属于{energy}{car_type}，{seat_count}，"
+            f"能耗/续航参考：{usage_cost}。主要卖点是{highlights}。"
+            "如果你想继续推进，我可以接着帮你算分期月供、查现车库存、讲优惠政策/销售话术，"
+            "也可以拿它和其他车型做对比。"
+        )
+    return (
+        f"{display_model} 是你当前关注的车型。"
+        "你可以继续问它的价格、配置、优惠政策、现车库存、分期月供，或者拿它和其他车型对比。"
+    )
+
+
 def _is_acknowledgement(message: str) -> bool:
     """Short confirmation phrases should continue the existing buying context."""
     normalized = message.strip().lower()
@@ -403,6 +490,49 @@ def _extract_budget_text(message: str) -> str:
     raw_value = match.group(1)
     value = raw_value.rstrip("0").rstrip(".") if "." in raw_value else raw_value
     return f"{value}万以内"
+
+
+def _extract_car_type_text(message: str) -> str:
+    """Extract explicit body type from the current user message."""
+    upper_message = message.upper()
+    if "SUV" in upper_message:
+        return "SUV"
+    if "轿车" in message:
+        return "轿车"
+    if "MPV" in upper_message:
+        return "MPV"
+    return ""
+
+
+def _extract_energy_type_text(message: str) -> str:
+    """Extract explicit energy type from the current user message."""
+    energy_aliases = [
+        ("插电混动", ["插电混动", "插混", "dm-i", "dmi"]),
+        ("油电混动", ["油电混动", "双擎"]),
+        ("混动", ["混动", "混合动力"]),
+        ("纯电", ["纯电", "电车", "新能源"]),
+        ("燃油", ["燃油", "油车", "汽油"]),
+    ]
+    lower_message = message.lower()
+    for standard, aliases in energy_aliases:
+        if any(alias in lower_message for alias in aliases):
+            return standard
+    return ""
+
+
+def _has_usage_mention(message: str) -> bool:
+    """Return whether the current message explicitly mentions usage."""
+    usage_terms = ["家用", "通勤", "商务", "代步", "上下班", "接送", "跑长途", "自驾", "家庭"]
+    return any(term in message for term in usage_terms)
+
+
+def _starts_new_recommendation_context(message: str) -> bool:
+    """A fresh recommendation request should not inherit stale soft preferences."""
+    return bool(
+        _has_budget_mention(message)
+        or _extract_car_type_text(message)
+        or _extract_energy_type_text(message)
+    )
 
 
 def _extract_down_payment_amount(message: str) -> int:
@@ -488,6 +618,30 @@ def _lookup_model_price(model: str) -> int:
     try:
         car = db.query(Car).filter(Car.model == model).first()
         return int(car.price) if car and car.price else 0
+    finally:
+        db.close()
+
+
+def _lookup_model_details(model: str) -> dict:
+    """Return local car-library facts for an exact model name."""
+    if not model:
+        return {}
+    db = SessionLocal()
+    try:
+        car = db.query(Car).filter(Car.model == model).first()
+        if not car:
+            return {}
+        return {
+            "brand": car.brand,
+            "model": car.model,
+            "price": car.price,
+            "energy_type": car.energy_type,
+            "car_type": car.car_type,
+            "seat_count": car.seat_count,
+            "fuel_consumption": car.fuel_consumption,
+            "range_km": car.range_km,
+            "highlights": car.highlights or [],
+        }
     finally:
         db.close()
 
